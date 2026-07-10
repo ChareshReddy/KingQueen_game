@@ -61,7 +61,27 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('ROOM: ${widget.roomId}'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('ROOM: ${widget.roomId}'),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.copy_rounded, color: AppTheme.gold, size: 20),
+              tooltip: 'Copy Room Code',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: widget.roomId));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Room code ${widget.roomId} copied!'),
+                    duration: const Duration(seconds: 2),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.share, color: AppTheme.gold),
@@ -78,16 +98,24 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildInfoBanner(),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: players.length,
-              itemBuilder: (context, index) {
-                return _buildPlayerTile(players[index], gameData.me?.id == players[index].id);
-              },
+      body: AnimatedRajaRaniBackground(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Column(
+              children: [
+                _buildInfoBanner(),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: players.length,
+                    itemBuilder: (context, index) {
+                      return _buildPlayerTile(players[index], gameData.me?.id == players[index].id);
+                    },
+                  ),
+                ),
+                _buildBottomPanel(context, ref, widget.isHost, players, room, gameData.me),
+              ],
             ),
           ),
           _buildBottomPanel(context, ref, widget.isHost, players, room, gameData.me),

@@ -151,15 +151,26 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: Stack(
-        children: [
-          // Background decoration
-          Positioned.fill(
-            child: Opacity(
-              opacity: 0.1,
-              child: Image.network(
-                'https://images.unsplash.com/photo-1605379399642-870262d3d051?auto=format&fit=crop&q=80',
-                fit: BoxFit.cover,
+      body: AnimatedRajaRaniBackground(
+        child: Stack(
+          children: [
+            SafeArea(
+              child: Column(
+                children: [
+                  _buildHeader(room, me, players),
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        _buildPlayArea(me, room, players),
+                        _buildGuessingGuide(players),
+                        _buildEmojiReactions(gameData.messages),
+                        if (_isFlying && _flyStart != null && _flyEnd != null)
+                          _buildFlyingCard(),
+                      ],
+                    ),
+                  ),
+                  _buildBottomControls(me, room),
+                ],
               ),
             ),
           ),
