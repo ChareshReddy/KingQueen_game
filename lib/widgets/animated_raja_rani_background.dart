@@ -1,5 +1,5 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:king_queen/core/theme/app_theme.dart';
 
@@ -10,11 +10,9 @@ class AnimatedRajaRaniBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Stack(
       children: [
-        // 1. Rich dark background with gold radial glow (removed water wave image)
+        // 1. Rich dark background with gold radial glow
         Positioned.fill(
           child: Container(
             color: AppTheme.background,
@@ -33,155 +31,77 @@ class AnimatedRajaRaniBackground extends StatelessWidget {
           ),
         ),
 
-        // 2. Group of animated 3D white idols moving in zig-zag & jumping patterns
-        
-        // RAJA (King Crown) - Bouncing and moving left-to-right on the left-center side
-        Animated3DIdol(
-          icon: FontAwesomeIcons.crown,
-          color: Colors.white.withOpacity(0.65),
-          size: 80,
-          startX: size.width * 0.15,
-          startY: size.height * 0.4,
-          amplitudeX: 60,
-          amplitudeY: 80,
-          duration: const Duration(seconds: 6),
+        // 3. Floating, animated Raja-Rani-Mantri-Chor idols (Hide & Seek / Fighting)
+
+        // RAJA (King Crown) - White, jumping/bouncing on the left
+        Positioned(
+          left: 40,
+          top: MediaQuery.of(context).size.height * 0.38,
+          child: FaIcon(
+            FontAwesomeIcons.crown,
+            size: 90,
+            color: Colors.white.withOpacity(0.18),
+          )
+              .animate(onPlay: (controller) => controller.repeat(reverse: true))
+              .moveY(end: -40, duration: 1.5.seconds, curve: Curves.easeInOut)
+              .rotate(end: 0.08, duration: 2.seconds, curve: Curves.easeInOut),
         ),
 
-        // RANI (Queen Crown) - Bouncing and moving in a wider offset on the right-center side
-        Animated3DIdol(
-          icon: FontAwesomeIcons.crown,
-          color: Colors.white.withOpacity(0.55),
-          size: 80,
-          startX: size.width * 0.72,
-          startY: size.height * 0.45,
-          amplitudeX: 70,
-          amplitudeY: 95,
-          duration: const Duration(seconds: 7),
+        // RANI (Queen Crown) - White, jumping & clashing/facing Raja
+        Positioned(
+          right: 40,
+          top: MediaQuery.of(context).size.height * 0.4,
+          child: FaIcon(
+            FontAwesomeIcons.crown,
+            size: 90,
+            color: Colors.white.withOpacity(0.15),
+          )
+              .animate(onPlay: (controller) => controller.repeat(reverse: true))
+              .moveY(end: -45, duration: 1.6.seconds, curve: Curves.easeInOut)
+              .moveX(end: -40, duration: 3.seconds, curve: Curves.easeInOut) // Shifts left towards Raja
+              .rotate(end: -0.08, duration: 2.2.seconds, curve: Curves.easeInOut),
         ),
 
-        // MANTRI (Minister/Police Shield) - Floating in a wide horizontal zig-zag at the top
-        Animated3DIdol(
-          icon: FontAwesomeIcons.shieldHalved,
-          color: Colors.white.withOpacity(0.45),
-          size: 60,
-          startX: size.width * 0.45,
-          startY: size.height * 0.22,
-          amplitudeX: 120,
-          amplitudeY: 40,
-          duration: const Duration(seconds: 9),
+        // MANTRI (Minister/Police Shield) - White, guarding the top-right
+        Positioned(
+          right: 80,
+          top: MediaQuery.of(context).size.height * 0.15,
+          child: FaIcon(
+            FontAwesomeIcons.shieldHalved,
+            size: 70,
+            color: Colors.white.withOpacity(0.12),
+          )
+              .animate(onPlay: (controller) => controller.repeat(reverse: true))
+              .moveY(end: 25, duration: 2.5.seconds, curve: Curves.easeInOut)
+              .rotate(end: 0.12, duration: 3.5.seconds, curve: Curves.easeInOut),
         ),
 
-        // CHOR (Thief/Spy) - Moving in a quick zig-zag at the bottom
-        Animated3DIdol(
-          icon: FontAwesomeIcons.userSecret,
-          color: Colors.white.withOpacity(0.5),
-          size: 65,
-          startX: size.width * 0.38,
-          startY: size.height * 0.75,
-          amplitudeX: 100,
-          amplitudeY: 60,
-          duration: const Duration(seconds: 5),
+        // CHOR (Thief Secret Agent) - White, playing HIDE & SEEK at the bottom
+        Positioned(
+          left: 80,
+          bottom: MediaQuery.of(context).size.height * 0.15,
+          child: FaIcon(
+            FontAwesomeIcons.userSecret,
+            size: 70,
+            color: Colors.white.withOpacity(0.15),
+          )
+              .animate(onPlay: (controller) => controller.repeat())
+              // Hide and Seek Loop
+              .fadeOut(duration: 1.8.seconds, curve: Curves.easeIn)
+              .then(delay: 400.ms)
+              .moveX(end: 60, duration: 100.ms) // Move while invisible (hiding)
+              .fadeIn(duration: 1.8.seconds, curve: Curves.easeOut) // Re-appear (seeking)
+              .then(delay: 2.seconds)
+              .fadeOut(duration: 1.8.seconds, curve: Curves.easeIn)
+              .then(delay: 400.ms)
+              .moveX(end: -60, duration: 100.ms) // Move back
+              .fadeIn(duration: 1.8.seconds, curve: Curves.easeOut)
+              .then(delay: 2.seconds),
         ),
 
-        // 3. Foreground content
+        // 4. Foreground content
         Positioned.fill(child: child),
       ],
-    );
-  }
-}
-
-class Animated3DIdol extends StatefulWidget {
-  final dynamic icon;
-  final Color color;
-  final double size;
-  final double startX;
-  final double startY;
-  final double amplitudeX;
-  final double amplitudeY;
-  final Duration duration;
-
-  const Animated3DIdol({
-    super.key,
-    required this.icon,
-    required this.color,
-    required this.size,
-    required this.startX,
-    required this.startY,
-    required this.amplitudeX,
-    required this.amplitudeY,
-    required this.duration,
-  });
-
-  @override
-  State<Animated3DIdol> createState() => _Animated3DIdolState();
-}
-
-class _Animated3DIdolState extends State<Animated3DIdol> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final val = _controller.value;
-
-        // 1. Zig-zag horizontal movement (sine wave)
-        final double xOffset = math.sin(val * 2 * math.pi) * widget.amplitudeX;
-        
-        // 2. Jumping vertical movement (absolute value of sine wave to create bouncing jumps)
-        final double yOffset = (math.sin(val * 4 * math.pi).abs() * -widget.amplitudeY);
-
-        // 3. 3D Rotation along X, Y, and Z axes
-        final double angleX = val * 2 * math.pi;
-        final double angleY = val * 2 * math.pi * 1.5;
-        final double angleZ = val * 2 * math.pi * 0.5;
-
-        return Positioned(
-          left: widget.startX + xOffset,
-          top: widget.startY + yOffset,
-          child: Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.001) // 3D Perspective entry
-              ..rotateX(angleX)
-              ..rotateY(angleY)
-              ..rotateZ(angleZ),
-            child: FaIcon(
-              widget.icon,
-              size: widget.size,
-              color: widget.color,
-              shadows: [
-                Shadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 10,
-                  offset: const Offset(2, 4),
-                ),
-                Shadow(
-                  color: widget.color.withOpacity(0.2),
-                  blurRadius: 20,
-                  offset: Offset.zero,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
