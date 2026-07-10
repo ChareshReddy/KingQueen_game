@@ -203,21 +203,22 @@ class HomeScreen extends ConsumerWidget {
             onPressed: () => Navigator.pop(context),
             child: const Text('CANCEL'),
           ),
-          GoldButton(
+          SizedBox(
             width: 120,
-            text: 'JOIN',
-            onPressed: () async {
-              final code = controller.text.trim().toUpperCase();
-              if (code.length == 6) {
-                try {
-                  await ref.read(gameProvider.notifier).joinRoom(code);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => LobbyScreen(roomId: code)),
-                    );
-                  }
+            child: GoldButton(
+              text: 'JOIN',
+              onPressed: () async {
+                final code = controller.text.trim().toUpperCase();
+                if (code.length == 6) {
+                  try {
+                    await ref.read(gameProvider.notifier).joinRoom(code);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => LobbyScreen(roomId: code)),
+                      );
+                    }
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -231,6 +232,7 @@ class HomeScreen extends ConsumerWidget {
               }
             },
           ),
+        ),
         ],
       ),
     );
