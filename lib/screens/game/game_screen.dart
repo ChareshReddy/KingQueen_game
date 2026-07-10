@@ -20,6 +20,7 @@ class GameScreen extends ConsumerStatefulWidget {
 
 class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObserver {
   String? _selectedPlayerId;
+  bool? _showGuide;
   bool _isMyCardRevealed = false;
   final GlobalKey _myCardKey = GlobalKey();
   final Map<String, GlobalKey> _playerKeys = {};
@@ -216,6 +217,31 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
     final room = ref.watch(gameProvider).currentRoom;
     final status = room?.status;
+    final bool isMobile = MediaQuery.of(context).size.width < 800;
+    final bool show = _showGuide ?? !isMobile;
+
+    if (!show) {
+      return Positioned(
+        left: 10,
+        top: 80,
+        child: GestureDetector(
+          onTap: () => setState(() => _showGuide = true),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
+            ),
+            child: const Icon(
+              Icons.help_outline_rounded,
+              color: AppTheme.gold,
+              size: 20,
+            ),
+          ),
+        ),
+      );
+    }
 
     String guesserText = '';
     String targetText = '';
@@ -234,12 +260,13 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     }
 
     return Positioned(
-      left: 20,
-      top: 100,
+      left: isMobile ? 10 : 20,
+      top: isMobile ? 80 : 100,
       child: Container(
-        padding: const EdgeInsets.all(15),
+        width: isMobile ? 180 : 220,
+        padding: EdgeInsets.all(isMobile ? 10 : 15),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.6),
+          color: Colors.black.withOpacity(0.75),
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
         ),
@@ -247,40 +274,56 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'GUESSING GUIDE',
-              style: GoogleFonts.cinzel(
-                color: AppTheme.gold,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'GUESSING GUIDE',
+                  style: GoogleFonts.cinzel(
+                    color: AppTheme.gold,
+                    fontSize: isMobile ? 10 : 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() => _showGuide = false),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white70,
+                    size: 16,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded, highlight: status == RoomStatus.playing),
-            _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_minister),
-            _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_thief),
+            SizedBox(height: isMobile ? 6 : 10),
+            _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded, highlight: status == RoomStatus.playing, isMobile: isMobile),
+            _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_minister, isMobile: isMobile),
+            _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_thief, isMobile: isMobile),
             if (guesserText.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(height: 1, width: 120, color: Colors.white10),
-              const SizedBox(height: 8),
+              SizedBox(height: isMobile ? 8 : 12),
+              Container(height: 1, width: double.infinity, color: Colors.white10),
+              SizedBox(height: isMobile ? 6 : 8),
               Text(
                 'ACTIVE GUESS',
                 style: GoogleFonts.cinzel(
                   color: AppTheme.gold,
-                  fontSize: 10,
+                  fontSize: isMobile ? 8 : 10,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: isMobile ? 4 : 6),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    guesserText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Text(
+                      guesserText,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isMobile ? 10 : 11,
+                        fontWeight: FontWeight.bold,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -288,9 +331,9 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                   const SizedBox(width: 4),
                   Text(
                     targetText,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white70,
-                      fontSize: 11,
+                      fontSize: isMobile ? 10 : 11,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -298,21 +341,21 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               ),
             ],
             if (activeRoles.any((r) => ['Guard', 'Fake Queen', 'Assassin'].contains(r))) ...[
-              const SizedBox(height: 12),
-              Container(height: 1, width: 120, color: Colors.white10),
-              const SizedBox(height: 8),
+              SizedBox(height: isMobile ? 8 : 12),
+              Container(height: 1, width: double.infinity, color: Colors.white10),
+              SizedBox(height: isMobile ? 6 : 8),
               Text(
                 'SPECIAL ROLES',
                 style: GoogleFonts.cinzel(
                   color: AppTheme.gold.withOpacity(0.8),
-                  fontSize: 10,
+                  fontSize: isMobile ? 8 : 10,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 4),
-              if (activeRoles.contains('Guard')) _specialRoleHint('GUARD', 'Protect 1 player'),
-              if (activeRoles.contains('Fake Queen')) _specialRoleHint('FAKE QUEEN', 'Mislead the King'),
-              if (activeRoles.contains('Assassin')) _specialRoleHint('ASSASSIN', 'Cancel 1 player\'s pts'),
+              SizedBox(height: isMobile ? 3 : 4),
+              if (activeRoles.contains('Guard')) _specialRoleHint('GUARD', 'Protect 1 player', isMobile: isMobile),
+              if (activeRoles.contains('Fake Queen')) _specialRoleHint('FAKE QUEEN', 'Mislead the King', isMobile: isMobile),
+              if (activeRoles.contains('Assassin')) _specialRoleHint('ASSASSIN', 'Cancel 1 player\'s pts', isMobile: isMobile),
             ]
           ],
         ),
@@ -320,7 +363,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     ).animate().fadeIn().slideX(begin: -0.2, end: 0);
   }
 
-  Widget _specialRoleHint(String role, String hint) {
+  Widget _specialRoleHint(String role, String hint, {bool isMobile = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.0),
       child: Row(
@@ -332,19 +375,19 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               color: AppTheme.gold.withOpacity(0.1),
               borderRadius: BorderRadius.circular(3),
             ),
-            child: Text(role, style: const TextStyle(color: AppTheme.gold, fontSize: 8, fontWeight: FontWeight.bold)),
+            child: Text(role, style: TextStyle(color: AppTheme.gold, fontSize: isMobile ? 7 : 8, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 6),
-          Text(hint, style: const TextStyle(color: Colors.white54, fontSize: 8)),
+          Text(hint, style: TextStyle(color: Colors.white54, fontSize: isMobile ? 7 : 8)),
         ],
       ),
     );
   }
 
-  Widget _guideRow(String from, String to, IconData icon, {bool highlight = false}) {
+  Widget _guideRow(String from, String to, IconData icon, {bool highlight = false, bool isMobile = false}) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 4 : 6, vertical: isMobile ? 2 : 4),
       decoration: BoxDecoration(
         color: highlight ? AppTheme.gold.withOpacity(0.15) : Colors.transparent,
         borderRadius: BorderRadius.circular(6),
@@ -355,27 +398,27 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _roleSmallTag(from),
+          _roleSmallTag(from, isMobile: isMobile),
           const SizedBox(width: 4),
-          Icon(icon, size: 14, color: highlight ? AppTheme.gold : AppTheme.gold.withOpacity(0.5)),
+          Icon(icon, size: isMobile ? 11 : 14, color: highlight ? AppTheme.gold : AppTheme.gold.withOpacity(0.5)),
           const SizedBox(width: 4),
-          _roleSmallTag(to),
+          _roleSmallTag(to, isMobile: isMobile),
         ],
       ),
     );
   }
 
-  Widget _roleSmallTag(String role) {
+  Widget _roleSmallTag(String role, {bool isMobile = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 4 : 6, vertical: 2),
+      margin: const EdgeInsets.symmetric(horizontal: 2),
       decoration: BoxDecoration(
         color: AppTheme.gold.withOpacity(0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         role,
-        style: const TextStyle(color: AppTheme.gold, fontSize: 9, fontWeight: FontWeight.bold),
+        style: TextStyle(color: AppTheme.gold, fontSize: isMobile ? 8 : 9, fontWeight: FontWeight.bold),
       ),
     );
   }
