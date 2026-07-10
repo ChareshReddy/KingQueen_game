@@ -187,7 +187,43 @@ class FirebaseService {
         if (currentRole == 'King') {
           transaction.update(roomRef, {'status': 'guessing_minister'});
         } else if (currentRole == 'Queen') {
-          transaction.update(roomRef, {'status': 'guessing_thief'});
+          final playerIds = List<String>.from(roomSnap.get('playerIds') ?? []);
+          if (playerIds.length <= 4) {
+            // In a 4-player game, if King, Queen, and Minister are found,
+            // the remaining player is automatically the Thief. No guessing needed.
+            transaction.update(roomRef, {'status': 'reveal'});
+            
+            final playersSnap = await playersColl.get();
+            final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
+            
+            final Map<String, int> scores = {};
+            int maxScore = -1;
+            for (var player in players) {
+              final String role = player.currentRole ?? '';
+              int roundScore = 0;
+              if (assassinTargetId == player.id) {
+                roundScore = 0;
+              } else {
+                roundScore = GameConstants.roleScores[role] ?? 0;
+              }
+              
+              scores[player.id] = roundScore;
+              if (roundScore > maxScore) {
+                maxScore = roundScore;
+              }
+
+              transaction.update(playersColl.doc(player.id), {
+                'totalScore': FieldValue.increment(roundScore),
+              });
+            }
+            return {
+              'isReveal': true,
+              'scores': scores,
+              'maxScore': maxScore,
+            };
+          } else {
+            transaction.update(roomRef, {'status': 'guessing_thief'});
+          }
         } else if (currentRole == 'Minister') {
           // Finish round and award points
           transaction.update(roomRef, {'status': 'reveal'});
