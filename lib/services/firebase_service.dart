@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:king_queen/models/message_model.dart';
 import 'package:king_queen/models/player_model.dart';
 import 'package:king_queen/models/room_model.dart';
+import 'package:king_queen/core/constants/game_constants.dart';
 
 class FirebaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -54,14 +55,24 @@ class FirebaseService {
 
   Future<void> joinRoom(String roomId, PlayerModel player) async {
     final roomDoc = _db.collection('rooms').doc(roomId);
-    final roomSnap = await roomDoc.get();
     
-    if (!roomSnap.exists) throw Exception("Room not found");
-    
-    await roomDoc.update({
-      'playerIds': FieldValue.arrayUnion([player.id])
+    await _db.runTransaction((transaction) async {
+      final roomSnap = await transaction.get(roomDoc);
+      if (!roomSnap.exists) throw Exception("Room not found");
+      
+      final playerIds = List<String>.from(roomSnap.get('playerIds') ?? []);
+      if (playerIds.length >= 10 && !playerIds.contains(player.id)) {
+        throw Exception("Room is full (Max 10 players)");
+      }
+      
+      if (!playerIds.contains(player.id)) {
+        playerIds.add(player.id);
+        transaction.update(roomDoc, {'playerIds': playerIds});
+      }
+      
+      final playerDoc = roomDoc.collection('players').doc(player.id);
+      transaction.set(playerDoc, player.toMap());
     });
-    await roomDoc.collection('players').doc(player.id).set(player.toMap());
   }
 
   Stream<RoomModel> streamRoom(String roomId) {
@@ -95,40 +106,256 @@ class FirebaseService {
     await batch.commit();
   }
 
-  Future<void> updateRoomStatus(String roomId, String status) async {
-    await _db.collection('rooms').doc(roomId).update({'status': status});
+  Future<void> resolveGuess({
+    required String roomId,
+    required String guesserId,
+    required String guessedPlayerId,
+    required String currentRole,
+  }) async {
+    final roomRef = _db.collection('rooms').doc(roomId);
+    final playersColl = roomRef.collection('players');
+
+    final result = await _db.runTransaction((transaction) async {
+      final roomSnap = await transaction.get(roomRef);
+      if (!roomSnap.exists) throw Exception("Room not found");
+      
+      final roomStatus = roomSnap.get('status') as String;
+      final guardProtectedId = roomSnap.data()!.containsKey('guardProtectedId') 
+          ? roomSnap.get('guardProtectedId') as String? 
+          : null;
+      final assassinTargetId = roomSnap.data()!.containsKey('assassinTargetId') 
+          ? roomSnap.get('assassinTargetId') as String? 
+          : null;
+
+      // Verify that room status matches expected guesser turn
+      final expectedStatus = currentRole == 'King' 
+          ? 'playing' 
+          : (currentRole == 'Queen' ? 'guessing_minister' : 'guessing_thief');
+      
+      if (roomStatus != expectedStatus) {
+        throw Exception("Stale game state or guess already resolved.");
+      }
+
+      // Check if the guessed player is protected by the Guard
+      if (guardProtectedId == guessedPlayerId) {
+        // Intercepted by Guard! Treat as wrong guess.
+        // Guesser swaps roles with the Guard player.
+        final playersSnap = await playersColl.get();
+        final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
+        final guardPlayer = players.firstWhere(
+          (p) => p.currentRole == 'Guard',
+          orElse: () => throw Exception("Guard role not found in game"),
+        );
+
+        final guesserRef = playersColl.doc(guesserId);
+        final guardRef = playersColl.doc(guardPlayer.id);
+
+        transaction.update(guesserRef, {'currentRole': 'Guard'});
+        transaction.update(guardRef, {'currentRole': currentRole});
+
+        // Update the room's role ID for the guesser to the Guard's ID
+        String? roleField;
+        if (currentRole == 'King') {
+          roleField = 'kingId';
+        } else if (currentRole == 'Queen') {
+          roleField = 'queenId';
+        } else if (currentRole == 'Minister') {
+          roleField = 'ministerId';
+        }
+
+        if (roleField != null) {
+          transaction.update(roomRef, {roleField: guardPlayer.id});
+        }
+        return null; // Penalty applied, end transaction
+      }
+
+      // Determine if the guess is correct
+      final isCorrect = currentRole == 'King'
+          ? (guessedPlayerId == roomSnap.get('queenId'))
+          : (currentRole == 'Queen'
+              ? (guessedPlayerId == roomSnap.get('ministerId'))
+              : (guessedPlayerId == roomSnap.get('thiefId')));
+
+      if (isCorrect) {
+        if (currentRole == 'King') {
+          transaction.update(roomRef, {'status': 'guessing_minister'});
+        } else if (currentRole == 'Queen') {
+          transaction.update(roomRef, {'status': 'guessing_thief'});
+        } else if (currentRole == 'Minister') {
+          // Finish round and award points
+          transaction.update(roomRef, {'status': 'reveal'});
+          
+          final playersSnap = await playersColl.get();
+          final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
+          
+          final Map<String, int> scores = {};
+          int maxScore = -1;
+          for (var player in players) {
+            int roundScore = 0;
+            // The guesser (Minister) was successful, so they get their full score.
+            // If they swapped earlier, we use their current role (which is Minister).
+            String role = player.id == guesserId ? 'Minister' : (player.currentRole ?? '');
+            
+            // Check if player is targeted by the Assassin
+            if (assassinTargetId == player.id) {
+              roundScore = 0; // Score eliminated by Assassin
+            } else {
+              roundScore = GameConstants.roleScores[role] ?? 0;
+            }
+            
+            scores[player.id] = roundScore;
+            if (roundScore > maxScore) {
+              maxScore = roundScore;
+            }
+
+            transaction.update(playersColl.doc(player.id), {
+              'totalScore': FieldValue.increment(roundScore),
+            });
+          }
+          return {
+            'isReveal': true,
+            'scores': scores,
+            'maxScore': maxScore,
+          };
+        }
+      } else {
+        // Incorrect guess: check if King guessed Fake Queen
+        final guesserRef = playersColl.doc(guesserId);
+        final otherRef = playersColl.doc(guessedPlayerId);
+
+        final guesserSnap = await transaction.get(guesserRef);
+        final otherSnap = await transaction.get(otherRef);
+
+        final guesserRole = guesserSnap.get('currentRole');
+        final otherRole = otherSnap.get('currentRole');
+
+        if (otherRole == 'Fake Queen' && guesserRole == 'King') {
+          // DESIGN CHOICE: Fake Queen successfully deceives the King!
+          // Deception bonus: base (400) + 200 bonus = 600 points total.
+          // King remains King and guesses again, no role swap occurs.
+          transaction.update(otherRef, {
+            'totalScore': FieldValue.increment(600),
+          });
+          transaction.update(roomRef, {
+            'fakeQueenDeceivedGuesserId': guesserId,
+            'fakeQueenDeceivedTargetId': guessedPlayerId,
+          });
+          return null;
+        }
+
+        // Standard incorrect guess: swap roles with the wrongly accused player
+        transaction.update(guesserRef, {'currentRole': otherRole});
+        transaction.update(otherRef, {'currentRole': guesserRole});
+
+        // Update room role fields
+        String? roleToField(String role) {
+          switch (role) {
+            case 'King': return 'kingId';
+            case 'Queen': return 'queenId';
+            case 'Minister': return 'ministerId';
+            case 'Thief': return 'thiefId';
+            default: return null;
+          }
+        }
+
+        final guesserField = roleToField(guesserRole);
+        final otherField = roleToField(otherRole);
+
+        if (guesserField != null) {
+          transaction.update(roomRef, {guesserField: guessedPlayerId});
+        }
+        if (otherField != null) {
+          transaction.update(roomRef, {otherField: guesserId});
+        }
+      }
+      return null;
+    });
+
+    if (result != null && result['isReveal'] == true) {
+      final scores = Map<String, int>.from(result['scores'] as Map);
+      final maxScore = result['maxScore'] as int;
+
+      final batch = _db.batch();
+      scores.forEach((playerId, roundScore) {
+        // Exclude bots and only update if player scored points
+        // DESIGN CHOICE: A player is considered a winner of the round if they score the highest points.
+        // In this case, we increment their lifetime wins in the users collection.
+        if (!playerId.startsWith('bot_')) {
+          final userRef = _db.collection('users').doc(playerId);
+          final isWinner = roundScore == maxScore;
+          batch.update(userRef, {
+            'totalScore': FieldValue.increment(roundScore),
+            if (isWinner) 'wins': FieldValue.increment(1),
+          });
+        }
+      });
+      await batch.commit();
+    }
   }
 
-  Future<void> finishRound(String roomId, List<PlayerModel> players) async {
-    final batch = _db.batch();
-    final roomRef = _db.collection('rooms').doc(roomId);
+  Future<void> updatePlayerReady(String roomId, String playerId, bool isReady) async {
+    await _db.collection('rooms').doc(roomId).collection('players').doc(playerId).update({
+      'isReady': isReady,
+    });
+  }
 
-    batch.update(roomRef, {'status': 'reveal'});
+  Future<void> leaveRoom(String roomId, String playerId) async {
+    final roomDoc = _db.collection('rooms').doc(roomId);
+    final playersColl = roomDoc.collection('players');
 
-    for (var player in players) {
-      int roundScore = 0;
-      switch (player.currentRole) {
-        case 'King': roundScore = 1000; break;
-        case 'Queen': roundScore = 900; break;
-        case 'Minister': roundScore = 800; break;
-        case 'Spy': roundScore = 700; break;
-        case 'Joker': roundScore = 600; break;
-        case 'Guard': roundScore = 500; break;
-        case 'Fake Queen': roundScore = 400; break;
-        case 'Assassin': roundScore = 300; break;
-        case 'Commander': roundScore = 200; break;
-        case 'Thief': roundScore = 0; break;
+    await _db.runTransaction((transaction) async {
+      final roomSnap = await transaction.get(roomDoc);
+      if (!roomSnap.exists) return;
+
+      final playerIds = List<String>.from(roomSnap.get('playerIds') ?? []);
+      final hostId = roomSnap.get('hostId') as String;
+
+      playerIds.remove(playerId);
+
+      if (hostId == playerId) {
+        if (playerIds.isNotEmpty) {
+          final newHostId = playerIds.first;
+          transaction.update(roomDoc, {
+            'hostId': newHostId,
+            'playerIds': playerIds,
+          });
+          transaction.update(playersColl.doc(newHostId), {'isHost': true});
+        } else {
+          transaction.delete(roomDoc);
+        }
+      } else {
+        transaction.update(roomDoc, {'playerIds': playerIds});
       }
-      
-      batch.update(roomRef.collection('players').doc(player.id), {
-        'totalScore': FieldValue.increment(roundScore),
-      });
-    }
 
+      transaction.delete(playersColl.doc(playerId));
+    });
+  }
+
+  Future<void> protectPlayer(String roomId, String guardId, String targetId) async {
+    final batch = _db.batch();
+    batch.update(_db.collection('rooms').doc(roomId), {
+      'guardProtectedId': targetId,
+    });
+    batch.update(_db.collection('rooms').doc(roomId).collection('players').doc(guardId), {
+      'guardUsedThisRound': true,
+    });
+    await batch.commit();
+  }
+
+  Future<void> useAssassinAbility(String roomId, String assassinId, String targetId) async {
+    final batch = _db.batch();
+    batch.update(_db.collection('rooms').doc(roomId), {
+      'assassinTargetId': targetId,
+    });
+    batch.update(_db.collection('rooms').doc(roomId).collection('players').doc(assassinId), {
+      'assassinUsedThisRound': true,
+    });
     await batch.commit();
   }
 
   Future<void> resetRound(String roomId, List<String> playerIds) async {
+    final messagesSnap = await _db.collection('rooms').doc(roomId).collection('messages').get();
+
     final batch = _db.batch();
     final roomRef = _db.collection('rooms').doc(roomId);
 
@@ -139,52 +366,31 @@ class FirebaseService {
       'queenId': null,
       'ministerId': null,
       'thiefId': null,
+      'guardProtectedId': null,
+      'assassinTargetId': null,
+      'fakeQueenDeceivedGuesserId': null,
+      'fakeQueenDeceivedTargetId': null,
     });
 
     for (var id in playerIds) {
       batch.update(roomRef.collection('players').doc(id), {
         'currentRole': null,
         'isReady': false,
+        'guardUsedThisRound': false,
+        'assassinUsedThisRound': false,
       });
+    }
+
+    for (var doc in messagesSnap.docs) {
+      batch.delete(doc.reference);
     }
 
     await batch.commit();
   }
 
-  Future<void> swapRolesAndContinue(String roomId, String kingId, String otherId) async {
-    final kingDoc = _db.collection('rooms').doc(roomId).collection('players').doc(kingId);
-    final otherDoc = _db.collection('rooms').doc(roomId).collection('players').doc(otherId);
-
-    await _db.runTransaction((transaction) async {
-      final kingSnap = await transaction.get(kingDoc);
-      final otherSnap = await transaction.get(otherDoc);
-
-      final kingRole = kingSnap.get('currentRole');
-      final otherRole = otherSnap.get('currentRole');
-
-      transaction.update(kingDoc, {'currentRole': otherRole});
-      transaction.update(otherDoc, {'currentRole': kingRole});
-      
-      // Map role to its ID field in the room document
-      String? roleToField(String role) {
-        switch (role) {
-          case 'King': return 'kingId';
-          case 'Queen': return 'queenId';
-          case 'Minister': return 'ministerId';
-          case 'Thief': return 'thiefId';
-          default: return null;
-        }
-      }
-
-      final kingField = roleToField(kingRole);
-      final otherField = roleToField(otherRole);
-
-      if (kingField != null) {
-        transaction.update(_db.collection('rooms').doc(roomId), {kingField: otherId});
-      }
-      if (otherField != null) {
-        transaction.update(_db.collection('rooms').doc(roomId), {otherField: kingId});
-      }
+  Future<void> updatePlayerOnlineStatus(String roomId, String playerId, bool isOnline) async {
+    await _db.collection('rooms').doc(roomId).collection('players').doc(playerId).update({
+      'isOnline': isOnline,
     });
   }
 
