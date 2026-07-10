@@ -8,12 +8,8 @@ class PlayerModel {
   final bool isOnline;
   final String? currentRole;
   final bool isReady;
-  final bool spyUsedThisRound;
   final bool guardUsedThisRound;
   final bool assassinUsedThisRound;
-  final bool jokerUsedThisRound;
-  final bool commanderUsedThisRound;
-  final bool commanderDoubleScore;
 
   PlayerModel({
     required this.id,
@@ -25,12 +21,8 @@ class PlayerModel {
     this.isOnline = true,
     this.currentRole,
     this.isReady = false,
-    this.spyUsedThisRound = false,
     this.guardUsedThisRound = false,
     this.assassinUsedThisRound = false,
-    this.jokerUsedThisRound = false,
-    this.commanderUsedThisRound = false,
-    this.commanderDoubleScore = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -44,12 +36,8 @@ class PlayerModel {
       'isOnline': isOnline,
       'currentRole': currentRole,
       'isReady': isReady,
-      'spyUsedThisRound': spyUsedThisRound,
       'guardUsedThisRound': guardUsedThisRound,
       'assassinUsedThisRound': assassinUsedThisRound,
-      'jokerUsedThisRound': jokerUsedThisRound,
-      'commanderUsedThisRound': commanderUsedThisRound,
-      'commanderDoubleScore': commanderDoubleScore,
     };
   }
 
@@ -64,12 +52,8 @@ class PlayerModel {
       isOnline: map['isOnline'] ?? true,
       currentRole: map['currentRole'],
       isReady: map['isReady'] ?? false,
-      spyUsedThisRound: map['spyUsedThisRound'] ?? false,
       guardUsedThisRound: map['guardUsedThisRound'] ?? false,
       assassinUsedThisRound: map['assassinUsedThisRound'] ?? false,
-      jokerUsedThisRound: map['jokerUsedThisRound'] ?? false,
-      commanderUsedThisRound: map['commanderUsedThisRound'] ?? false,
-      commanderDoubleScore: map['commanderDoubleScore'] ?? false,
     );
   }
 
@@ -83,12 +67,8 @@ class PlayerModel {
     bool? isOnline,
     String? currentRole,
     bool? isReady,
-    bool? spyUsedThisRound,
     bool? guardUsedThisRound,
     bool? assassinUsedThisRound,
-    bool? jokerUsedThisRound,
-    bool? commanderUsedThisRound,
-    bool? commanderDoubleScore,
   }) {
     return PlayerModel(
       id: id ?? this.id,
@@ -100,12 +80,8 @@ class PlayerModel {
       isOnline: isOnline ?? this.isOnline,
       currentRole: currentRole ?? this.currentRole,
       isReady: isReady ?? this.isReady,
-      spyUsedThisRound: spyUsedThisRound ?? this.spyUsedThisRound,
       guardUsedThisRound: guardUsedThisRound ?? this.guardUsedThisRound,
       assassinUsedThisRound: assassinUsedThisRound ?? this.assassinUsedThisRound,
-      jokerUsedThisRound: jokerUsedThisRound ?? this.jokerUsedThisRound,
-      commanderUsedThisRound: commanderUsedThisRound ?? this.commanderUsedThisRound,
-      commanderDoubleScore: commanderDoubleScore ?? this.commanderDoubleScore,
     );
   }
 }

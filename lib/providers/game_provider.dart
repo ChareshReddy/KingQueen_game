@@ -205,11 +205,6 @@ class GameNotifier extends Notifier<GameState> {
     state = GameState(me: state.me);
   }
 
-  Future<void> useSpyAbility(String targetPlayerId) async {
-    if (state.currentRoom == null || state.me == null) return;
-    await _service.useSpyAbility(state.currentRoom!.id, state.me!.id);
-  }
-
   Future<void> protectPlayer(String targetPlayerId) async {
     if (state.currentRoom == null || state.me == null) return;
     await _service.protectPlayer(state.currentRoom!.id, state.me!.id, targetPlayerId);
@@ -218,15 +213,6 @@ class GameNotifier extends Notifier<GameState> {
   Future<void> useAssassinAbility(String targetPlayerId) async {
     if (state.currentRoom == null || state.me == null) return;
     await _service.useAssassinAbility(state.currentRoom!.id, state.me!.id, targetPlayerId);
-  }
-  Future<void> useJokerAbility(String fakeRole) async {
-    if (state.currentRoom == null || state.me == null) return;
-    await _service.useJokerAbility(state.currentRoom!.id, state.me!.id, fakeRole);
-  }
-
-  Future<void> useCommanderAbility() async {
-    if (state.currentRoom == null || state.me == null) return;
-    await _service.useCommanderAbility(state.currentRoom!.id, state.me!.id);
   }
 
   Future<void> refreshMe() async {
