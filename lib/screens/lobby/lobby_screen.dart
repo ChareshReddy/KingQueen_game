@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:king_queen/core/theme/app_theme.dart';
 import 'package:king_queen/models/player_model.dart';
@@ -7,31 +8,73 @@ import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/screens/game/game_screen.dart';
 import 'package:king_queen/widgets/gold_button.dart';
 
-class LobbyScreen extends ConsumerWidget {
+class LobbyScreen extends ConsumerStatefulWidget {
   final String roomId;
   final bool isHost;
 
   const LobbyScreen({super.key, required this.roomId, this.isHost = false});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LobbyScreen> createState() => _LobbyScreenState();
+}
+
+class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    Future.microtask(() => ref.read(gameProvider.notifier).updateOnlineStatus(true));
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    ref.read(gameProvider.notifier).updateOnlineStatus(false);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      ref.read(gameProvider.notifier).updateOnlineStatus(false);
+    } else if (state == AppLifecycleState.resumed) {
+      ref.read(gameProvider.notifier).updateOnlineStatus(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final gameData = ref.watch(gameProvider);
     final players = gameData.players;
     final room = gameData.currentRoom;
 
     if (room?.status == RoomStatus.playing) {
-      Future.microtask(() => Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const GameScreen()),
-      ));
+      Future.microtask(() {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const GameScreen()),
+          );
+        }
+      });
     }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('ROOM: $roomId'),
+        title: Text('ROOM: ${widget.roomId}'),
         actions: [
           IconButton(
             icon: const Icon(Icons.share, color: AppTheme.gold),
-            onPressed: () {},
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: widget.roomId));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Room code copied to clipboard! Share with friends.'),
+                  backgroundColor: AppTheme.gold,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -47,7 +90,7 @@ class LobbyScreen extends ConsumerWidget {
               },
             ),
           ),
-          _buildBottomPanel(context, ref, isHost, players),
+          _buildBottomPanel(context, ref, widget.isHost, players, room, gameData.me),
         ],
       ),
     );
@@ -85,7 +128,7 @@ class LobbyScreen extends ConsumerWidget {
         children: [
           CircleAvatar(
             backgroundColor: AppTheme.gold,
-            child: Text(player.name[0].toUpperCase()),
+            child: Text(player.name.isNotEmpty ? player.name[0].toUpperCase() : 'P'),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -114,7 +157,18 @@ class LobbyScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBottomPanel(BuildContext context, WidgetRef ref, bool isHost, List<PlayerModel> players) {
+  Widget _buildBottomPanel(
+    BuildContext context,
+    WidgetRef ref,
+    bool isHost,
+    List<PlayerModel> players,
+    RoomModel? room,
+    PlayerModel? me,
+  ) {
+    // START GAME requires at least 4 players and all non-hosts to be ready
+    final bool allReady = players.length >= 4 && 
+        players.every((p) => p.isReady || p.id == room?.hostId);
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -134,16 +188,15 @@ class LobbyScreen extends ConsumerWidget {
                 children: [
                   GoldButton(
                     text: 'START GAME',
-                    onPressed: players.length >= 4 
+                    onPressed: allReady 
                       ? () => ref.read(gameProvider.notifier).startGame()
-                      : () {}, // Empty callback instead of null if GoldButton requires non-null
+                      : null,
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      // Logic to add a bot
-                      ref.read(gameProvider.notifier).addBot();
-                    },
+                    onPressed: players.length < 10 
+                      ? () => ref.read(gameProvider.notifier).addBot()
+                      : null,
                     icon: const Icon(Icons.android, color: AppTheme.gold),
                     label: const Text('ADD AI PLAYER', style: TextStyle(color: AppTheme.gold)),
                     style: OutlinedButton.styleFrom(
@@ -155,12 +208,17 @@ class LobbyScreen extends ConsumerWidget {
               )
             else
               GoldButton(
-                text: 'READY',
-                onPressed: () {},
+                text: (me?.isReady ?? false) ? 'UNREADY' : 'READY',
+                onPressed: () => ref.read(gameProvider.notifier).toggleReady(),
               ),
             const SizedBox(height: 12),
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () async {
+                await ref.read(gameProvider.notifier).leaveRoom();
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
               child: const Text('LEAVE ROOM', style: TextStyle(color: Colors.redAccent)),
             ),
           ],

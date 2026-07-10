@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:king_queen/models/message_model.dart';
@@ -42,11 +43,26 @@ class GameState {
 
 class GameNotifier extends Notifier<GameState> {
   late FirebaseService _service;
+  StreamSubscription<RoomModel>? _roomSubscription;
+  StreamSubscription<List<PlayerModel>>? _playersSubscription;
+  StreamSubscription<List<MessageModel>>? _messagesSubscription;
 
   @override
   GameState build() {
     _service = ref.watch(firebaseServiceProvider);
+    ref.onDispose(() {
+      _cancelSubscriptions();
+    });
     return GameState();
+  }
+
+  void _cancelSubscriptions() {
+    _roomSubscription?.cancel();
+    _playersSubscription?.cancel();
+    _messagesSubscription?.cancel();
+    _roomSubscription = null;
+    _playersSubscription = null;
+    _messagesSubscription = null;
   }
 
   Future<void> login(String name) async {
@@ -110,15 +126,17 @@ class GameNotifier extends Notifier<GameState> {
   }
 
   void _listenToRoom(String roomId) {
-    _service.streamRoom(roomId).listen((room) {
+    _cancelSubscriptions();
+
+    _roomSubscription = _service.streamRoom(roomId).listen((room) {
       state = state.copyWith(currentRoom: room);
     });
-    _service.streamPlayers(roomId).listen((players) {
+    _playersSubscription = _service.streamPlayers(roomId).listen((players) {
       state = state.copyWith(players: players);
       final updatedMe = players.firstWhere((p) => p.id == state.me?.id, orElse: () => state.me!);
       state = state.copyWith(me: updatedMe);
     });
-    _service.streamMessages(roomId).listen((messages) {
+    _messagesSubscription = _service.streamMessages(roomId).listen((messages) {
       state = state.copyWith(messages: messages);
     });
   }
@@ -147,8 +165,15 @@ class GameNotifier extends Notifier<GameState> {
 
   List<String> _getRolesForPlayerCount(int count) {
     List<String> pool = ['King', 'Queen', 'Minister', 'Spy', 'Joker', 'Guard', 'Fake Queen', 'Assassin', 'Commander'];
-    List<String> roles = pool.sublist(0, count - 1);
+    // Defensive clamp: ensure we don't request more elements than available in the pool
+    final int activeCount = count.clamp(1, pool.length + 1);
+    List<String> roles = pool.sublist(0, activeCount - 1);
     roles.add('Thief');
+    
+    // Fallback: if count exceeds the pool size, fill the rest with Commander
+    while (roles.length < count) {
+      roles.add('Commander');
+    }
     return roles;
   }
 
@@ -158,34 +183,39 @@ class GameNotifier extends Notifier<GameState> {
     final room = state.currentRoom!;
     final me = state.me!;
 
-    // Case 1: King guessing Queen
-    if (room.status == RoomStatus.playing && me.currentRole == 'King') {
-      final isCorrect = guessedPlayerId == room.queenId;
-      if (isCorrect) {
-        // Move to next phase: Queen guesses Minister
-        await _service.updateRoomStatus(room.id, 'guessing_minister');
-      } else {
-        await _service.swapRolesAndContinue(room.id, me.id, guessedPlayerId);
-      }
-    } 
-    // Case 2: Queen guessing Minister
-    else if (room.status == RoomStatus.guessing_minister && me.currentRole == 'Queen') {
-      final isCorrect = guessedPlayerId == room.ministerId;
-      if (isCorrect) {
-        await _service.updateRoomStatus(room.id, 'guessing_thief');
-      } else {
-        await _service.swapRolesAndContinue(room.id, me.id, guessedPlayerId);
-      }
-    }
-    // Case 3: Minister guessing Thief
-    else if (room.status == RoomStatus.guessing_thief && me.currentRole == 'Minister') {
-      final isCorrect = guessedPlayerId == room.thiefId;
-      if (isCorrect) {
-        await _service.finishRound(room.id, state.players);
-      } else {
-        await _service.swapRolesAndContinue(room.id, me.id, guessedPlayerId);
-      }
-    }
+    await _service.resolveGuess(
+      roomId: room.id,
+      guesserId: me.id,
+      guessedPlayerId: guessedPlayerId,
+      currentRole: me.currentRole ?? '',
+    );
+  }
+
+  Future<void> toggleReady() async {
+    if (state.currentRoom == null || state.me == null) return;
+    await _service.updatePlayerReady(state.currentRoom!.id, state.me!.id, !state.me!.isReady);
+  }
+
+  Future<void> leaveRoom() async {
+    if (state.currentRoom == null || state.me == null) return;
+    _cancelSubscriptions();
+    await _service.leaveRoom(state.currentRoom!.id, state.me!.id);
+    state = GameState(me: state.me);
+  }
+
+  Future<void> useSpyAbility(String targetPlayerId) async {
+    if (state.currentRoom == null || state.me == null) return;
+    await _service.useSpyAbility(state.currentRoom!.id, state.me!.id);
+  }
+
+  Future<void> protectPlayer(String targetPlayerId) async {
+    if (state.currentRoom == null || state.me == null) return;
+    await _service.protectPlayer(state.currentRoom!.id, state.me!.id, targetPlayerId);
+  }
+
+  Future<void> useAssassinAbility(String targetPlayerId) async {
+    if (state.currentRoom == null || state.me == null) return;
+    await _service.useAssassinAbility(state.currentRoom!.id, state.me!.id, targetPlayerId);
   }
 
   Future<void> startNextRound() async {
@@ -195,6 +225,7 @@ class GameNotifier extends Notifier<GameState> {
 
   void addBot() async {
     if (state.currentRoom == null) return;
+    if (state.players.length >= 10) return; // Limit room to max 10 players
     final botNames = ['Soldier Bot', 'Police Bot', 'Thief Bot', 'Spy Bot', 'Joker Bot'];
     final name = botNames[Random().nextInt(botNames.length)];
     final bot = PlayerModel(
@@ -204,6 +235,11 @@ class GameNotifier extends Notifier<GameState> {
       isReady: true,
     );
     await _service.joinRoom(state.currentRoom!.id, bot);
+  }
+
+  Future<void> updateOnlineStatus(bool isOnline) async {
+    if (state.currentRoom == null || state.me == null) return;
+    await _service.updatePlayerOnlineStatus(state.currentRoom!.id, state.me!.id, isOnline);
   }
 
   Future<void> sendMessage(String text) async {

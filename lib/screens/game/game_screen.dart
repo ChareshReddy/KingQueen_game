@@ -17,7 +17,7 @@ class GameScreen extends ConsumerStatefulWidget {
   ConsumerState<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends ConsumerState<GameScreen> {
+class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObserver {
   String? _selectedPlayerId;
   bool _isMyCardRevealed = false;
   final GlobalKey _myCardKey = GlobalKey();
@@ -26,6 +26,29 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   Offset? _flyStart;
   Offset? _flyEnd;
   bool _isFlying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    Future.microtask(() => ref.read(gameProvider.notifier).updateOnlineStatus(true));
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    ref.read(gameProvider.notifier).updateOnlineStatus(false);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      ref.read(gameProvider.notifier).updateOnlineStatus(false);
+    } else if (state == AppLifecycleState.resumed) {
+      ref.read(gameProvider.notifier).updateOnlineStatus(true);
+    }
+  }
 
   void _triggerFlyAnimation(Offset start, Offset end) {
     setState(() {
@@ -90,12 +113,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           SafeArea(
             child: Column(
               children: [
-                _buildHeader(room),
+                 _buildHeader(room, me, players),
                 Expanded(
                   child: Stack(
                     children: [
                       _buildPlayArea(me, room, players),
-                      _buildGuessingGuide(),
+                      _buildGuessingGuide(players),
                       _buildEmojiReactions(gameData.messages),
                       if (_isFlying && _flyStart != null && _flyEnd != null)
                         _buildFlyingCard(),
@@ -143,7 +166,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
   }
 
-  Widget _buildGuessingGuide() {
+  Widget _buildGuessingGuide(List<PlayerModel> players) {
+    final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
+
     return Positioned(
       left: 20,
       top: 100,
@@ -170,10 +195,49 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded),
             _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded),
             _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded),
+            if (activeRoles.any((r) => ['Spy', 'Guard', 'Fake Queen', 'Assassin', 'Commander', 'Joker'].contains(r))) ...[
+              const SizedBox(height: 12),
+              Container(height: 1, width: 120, color: Colors.white10),
+              const SizedBox(height: 8),
+              Text(
+                'SPECIAL ROLES',
+                style: GoogleFonts.cinzel(
+                  color: AppTheme.gold.withOpacity(0.8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              if (activeRoles.contains('Spy')) _specialRoleHint('SPY', 'Secretly see 1 card'),
+              if (activeRoles.contains('Guard')) _specialRoleHint('GUARD', 'Protect 1 player'),
+              if (activeRoles.contains('Fake Queen')) _specialRoleHint('FAKE QUEEN', 'Mislead the King'),
+              if (activeRoles.contains('Assassin')) _specialRoleHint('ASSASSIN', 'Cancel 1 player\'s pts'),
+            ]
           ],
         ),
       ),
     ).animate().fadeIn().slideX(begin: -0.2, end: 0);
+  }
+
+  Widget _specialRoleHint(String role, String hint) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(
+              color: AppTheme.gold.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text(role, style: const TextStyle(color: AppTheme.gold, fontSize: 8, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 6),
+          Text(hint, style: const TextStyle(color: Colors.white54, fontSize: 8)),
+        ],
+      ),
+    );
   }
 
   Widget _guideRow(String from, String to, IconData icon) {
@@ -238,7 +302,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     return Stack(
       children: recentMessages.map((m) {
         // Use senderId to determine horizontal position
-        final xPos = (m.senderId.hashCode % 300).toDouble();
+        final xPos = (m.senderId.hashCode.abs() % 300).toDouble();
         return Positioned(
           bottom: 100,
           left: 50 + xPos,
@@ -316,7 +380,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
   }
 
-  Widget _buildUserBadge(me) {
+  Widget _buildUserBadge(PlayerModel? me) {
     return Positioned(
       top: 50,
       right: 20,
@@ -341,17 +405,22 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
   }
 
-  Widget _buildHeader(RoomModel? room) {
+  Widget _buildHeader(RoomModel? room, PlayerModel? me, List<PlayerModel> players) {
+    final myScore = me?.totalScore ?? 0;
+    final topScore = players.isEmpty
+        ? 0
+        : players.map((p) => p.totalScore).reduce((a, b) => a > b ? a : b);
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('YOU', style: TextStyle(fontSize: 10, color: AppTheme.gold)),
-              Text('0', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+              const Text('YOU', style: TextStyle(fontSize: 10, color: AppTheme.gold)),
+              Text('$myScore', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
             ],
           ),
           Container(
@@ -365,11 +434,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               style: const TextStyle(color: AppTheme.gold, fontWeight: FontWeight.bold),
             ),
           ),
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('TOP', style: TextStyle(fontSize: 10, color: AppTheme.gold)),
-              Text('0', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+              const Text('TOP', style: TextStyle(fontSize: 10, color: AppTheme.gold)),
+              Text('$topScore', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
             ],
           ),
         ],
@@ -377,7 +446,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
   }
 
-  Widget _buildPlayArea(me, room, players) {
+  Widget _buildPlayArea(PlayerModel? me, RoomModel? room, List<PlayerModel> players) {
     final otherPlayers = players.where((p) => p.id != me?.id).toList();
     final isKing = me?.currentRole == 'King';
     final isQueen = me?.currentRole == 'Queen';
@@ -434,7 +503,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
   }
 
-  Widget _buildPlayersGrid(players, bool canSelect, String? kingId, String? queenId, String? ministerId, RoomStatus? status) {
+  Widget _buildPlayersGrid(List<PlayerModel> players, bool canSelect, String? kingId, String? queenId, String? ministerId, RoomStatus? status) {
+    final gameData = ref.watch(gameProvider);
+    final me = gameData.me;
+    final room = gameData.currentRoom;
+
     return Wrap(
       spacing: 15,
       runSpacing: 15,
@@ -449,6 +522,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         bool showKingBadge = isKing;
         bool showQueenBadge = isQueen && (status == RoomStatus.guessing_minister || status == RoomStatus.guessing_thief || status == RoomStatus.reveal);
         bool showMinisterBadge = isMinister && (status == RoomStatus.guessing_thief || status == RoomStatus.reveal);
+
+        // Presence check
+        bool isOnline = player.isOnline;
 
         _playerKeys.putIfAbsent(player.id, () => GlobalKey());
         return GestureDetector(
@@ -488,6 +564,32 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     _badgeLabel('Q'),
                   if (showMinisterBadge)
                     _badgeLabel('M'),
+                  // Presence indicator dot
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: isOnline ? Colors.green : Colors.grey,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.black, width: 2),
+                      ),
+                    ),
+                  ),
+                  // Guard Protected Shield Icon (shown only to the Guard or during reveal phase)
+                  if (room?.guardProtectedId == player.id && 
+                      (me?.currentRole == 'Guard' || status == RoomStatus.reveal))
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                        child: const Icon(Icons.shield, color: Colors.white, size: 10),
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -505,6 +607,31 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 const Text('QUEEN / రాణి', style: TextStyle(fontSize: 8, color: AppTheme.gold)),
               if (showMinisterBadge)
                 const Text('MINISTER / మంత్రి', style: TextStyle(fontSize: 8, color: AppTheme.gold)),
+              
+              // Ability action buttons
+              if (me != null && (status == RoomStatus.playing || status == RoomStatus.guessing_minister || status == RoomStatus.guessing_thief)) ...[
+                if (me.currentRole == 'Spy' && !me.spyUsedThisRound)
+                  TextButton.icon(
+                    onPressed: () => _confirmAndUseSpy(context, player),
+                    icon: const Icon(Icons.visibility, size: 12, color: Colors.blueAccent),
+                    label: const Text('REVEAL', style: TextStyle(fontSize: 8, color: Colors.blueAccent)),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                  ),
+                if (me.currentRole == 'Guard' && !me.guardUsedThisRound)
+                  TextButton.icon(
+                    onPressed: () => _useGuardAbility(context, player),
+                    icon: const Icon(Icons.shield, size: 12, color: Colors.greenAccent),
+                    label: const Text('PROTECT', style: TextStyle(fontSize: 8, color: Colors.greenAccent)),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                  ),
+                if (me.currentRole == 'Assassin' && !me.assassinUsedThisRound)
+                  TextButton.icon(
+                    onPressed: () => _useAssassinAbility(context, player),
+                    icon: const Icon(Icons.gps_fixed, size: 12, color: Colors.redAccent),
+                    label: const Text('TARGET', style: TextStyle(fontSize: 8, color: Colors.redAccent)),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                  ),
+              ],
             ],
           ),
         );
@@ -524,7 +651,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
   }
 
-  Widget _buildBottomControls(me, room) {
+  Widget _buildBottomControls(PlayerModel? me, RoomModel? room) {
     bool isReveal = room?.status == RoomStatus.reveal;
     bool isHost = room?.hostId == me?.id;
 
@@ -561,6 +688,90 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         ],
       ),
     );
+  }
+
+  void _confirmAndUseSpy(BuildContext context, PlayerModel target) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('USE SPY ABILITY', style: TextStyle(color: AppTheme.gold)),
+        content: Text('Do you want to secretly view ${target.name}\'s role chit?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
+          ),
+          GoldButton(
+            text: 'REVEAL',
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(gameProvider.notifier).useSpyAbility(target.id);
+              if (context.mounted) {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    backgroundColor: AppTheme.surface,
+                    title: const Text('SPY REVEAL', style: TextStyle(color: AppTheme.gold)),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.visibility, size: 50, color: AppTheme.gold),
+                        const SizedBox(height: 16),
+                        Text(
+                          '${target.name}\'s role is:',
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          (target.currentRole ?? 'Thief').toUpperCase(),
+                          style: GoogleFonts.cinzel(
+                            color: AppTheme.gold,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('DISMISS', style: TextStyle(color: AppTheme.gold)),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _useGuardAbility(BuildContext context, PlayerModel target) async {
+    await ref.read(gameProvider.notifier).protectPlayer(target.id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You have protected ${target.name} from being guessed!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  void _useAssassinAbility(BuildContext context, PlayerModel target) async {
+    await ref.read(gameProvider.notifier).useAssassinAbility(target.id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You have targeted ${target.name}! Their score is eliminated for this round.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
 }

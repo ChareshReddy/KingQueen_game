@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Users rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write, update: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Rooms rules
+    match /rooms/{roomId} {
+      allow create: if isAuthenticated();
+      // Allow read/update if the user is in the room
+      allow read, update: if isAuthenticated() && (
+        request.auth.uid in resource.data.playerIds || 
+        request.auth.uid == resource.data.hostId
+      );
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.hostId;
+
+      // Players subcollection
+      match /players/{playerId} {
+        allow read: if isAuthenticated();
+        // Allow write if the user is in the room or host
+        allow write, update, delete: if isAuthenticated() && (
+          request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds ||
+          request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId
+        );
+      }
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && (
+          request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds
+        );
+      }
+    }
+  }
+}

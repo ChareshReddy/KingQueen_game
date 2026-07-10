@@ -10,6 +10,8 @@ class RoomModel {
   final String? queenId;
   final String? ministerId;
   final String? thiefId;
+  final String? guardProtectedId;
+  final String? assassinTargetId;
   final DateTime createdAt;
 
   RoomModel({
@@ -22,6 +24,8 @@ class RoomModel {
     this.queenId,
     this.ministerId,
     this.thiefId,
+    this.guardProtectedId,
+    this.assassinTargetId,
     required this.createdAt,
   });
 
@@ -36,6 +40,8 @@ class RoomModel {
       'queenId': queenId,
       'ministerId': ministerId,
       'thiefId': thiefId,
+      'guardProtectedId': guardProtectedId,
+      'assassinTargetId': assassinTargetId,
       'createdAt': createdAt.toIso8601String(),
     };
   }
@@ -54,6 +60,8 @@ class RoomModel {
       queenId: map['queenId'],
       ministerId: map['ministerId'],
       thiefId: map['thiefId'],
+      guardProtectedId: map['guardProtectedId'],
+      assassinTargetId: map['assassinTargetId'],
       createdAt: map['createdAt'] != null 
           ? DateTime.parse(map['createdAt']) 
           : DateTime.now(),
@@ -70,6 +78,8 @@ class RoomModel {
     String? queenId,
     String? ministerId,
     String? thiefId,
+    String? guardProtectedId,
+    String? assassinTargetId,
     DateTime? createdAt,
   }) {
     return RoomModel(
@@ -82,6 +92,8 @@ class RoomModel {
       queenId: queenId ?? this.queenId,
       ministerId: ministerId ?? this.ministerId,
       thiefId: thiefId ?? this.thiefId,
+      guardProtectedId: guardProtectedId ?? this.guardProtectedId,
+      assassinTargetId: assassinTargetId ?? this.assassinTargetId,
       createdAt: createdAt ?? this.createdAt,
     );
   }

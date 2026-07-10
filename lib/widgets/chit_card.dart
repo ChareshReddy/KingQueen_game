@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:king_queen/core/theme/app_theme.dart';
+import 'package:king_queen/core/constants/game_constants.dart';
 
 class ChitCard extends StatelessWidget {
   final String role;
@@ -137,27 +138,33 @@ class ChitCard extends StatelessWidget {
   }
 
   Map<String, dynamic> _getRoleInfo(String role) {
+    final normalizedKey = GameConstants.roleScores.keys.firstWhere(
+      (k) => k.toLowerCase() == role.toLowerCase(),
+      orElse: () => 'Thief',
+    );
+    final score = GameConstants.roleScores[normalizedKey] ?? 0;
+
     switch (role.toLowerCase()) {
       case 'king':
-        return {'telugu': 'రాజు', 'score': 1000, 'icon': Icons.workspace_premium};
+        return {'telugu': 'రాజు', 'score': score, 'icon': Icons.workspace_premium};
       case 'queen':
-        return {'telugu': 'రాణి', 'score': 900, 'icon': Icons.diamond};
+        return {'telugu': 'రాణి', 'score': score, 'icon': Icons.diamond};
       case 'minister':
-        return {'telugu': 'మంత్రి', 'score': 800, 'icon': Icons.gavel};
-      case 'soldier':
-        return {'telugu': 'సైనికుడు', 'score': 700, 'icon': Icons.shield};
-      case 'police':
-        return {'telugu': 'పోలీస్', 'score': 600, 'icon': Icons.security};
+        return {'telugu': 'మంత్రి', 'score': score, 'icon': Icons.gavel};
       case 'spy':
-        return {'telugu': 'గూఢచారి', 'score': 500, 'icon': Icons.visibility};
+        return {'telugu': 'గూఢచారి', 'score': score, 'icon': Icons.visibility};
       case 'joker':
-        return {'telugu': 'జోకర్', 'score': 400, 'icon': Icons.face};
+        return {'telugu': 'జోకర్', 'score': score, 'icon': Icons.face};
+      case 'guard':
+        return {'telugu': 'రక్షకుడు', 'score': score, 'icon': Icons.shield};
+      case 'fake queen':
+        return {'telugu': 'నకిలీ రాణి', 'score': score, 'icon': Icons.face_retouching_natural};
+      case 'assassin':
+        return {'telugu': 'హంతకుడు', 'score': score, 'icon': Icons.dangerous};
       case 'commander':
-        return {'telugu': 'కమాండర్', 'score': 300, 'icon': Icons.military_tech};
-      case 'servant':
-        return {'telugu': 'సేవకుడు', 'score': 200, 'icon': Icons.cleaning_services};
+        return {'telugu': 'కమాండర్', 'score': score, 'icon': Icons.military_tech};
       default:
-        return {'telugu': 'దొంగ', 'score': 0, 'icon': Icons.privacy_tip_outlined};
+        return {'telugu': 'దొంగ', 'score': score, 'icon': Icons.privacy_tip_outlined};
     }
   }
 }
