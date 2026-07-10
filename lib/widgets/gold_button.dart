@@ -5,18 +5,20 @@ class GoldButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
   final bool isLoading;
+  final double? width;
 
   const GoldButton({
     super.key,
     required this.text,
     this.onPressed,
     this.isLoading = false,
+    this.width,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
+      width: width ?? double.infinity,
       height: 56,
       decoration: BoxDecoration(
         gradient: AppTheme.goldGradient,
