@@ -29,6 +29,159 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   Offset? _flyEnd;
   bool _isFlying = false;
 
+  bool _isLeaving = false;
+  bool _isEmojiPanelOpen = false;
+
+  void _showLeaveConfirmation() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: Text(
+          'LEAVE GAME?',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.cinzel(color: Colors.redAccent, fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Are you sure you want to leave the game? If you are a key role player, the game will be reset for other players.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+              await _leaveGame();
+            },
+            child: const Text('LEAVE', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _leaveGame() async {
+    if (_isLeaving) return;
+    setState(() {
+      _isLeaving = true;
+    });
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await ref.read(gameProvider.notifier).leaveRoom();
+      if (mounted) {
+        navigator.popUntil((route) => route.isFirst);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLeaving = false;
+        });
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Error leaving game: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showGuideDialog(List<PlayerModel> players) {
+    final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
+    final sortedActiveRoles = activeRoles.toList()
+      ..sort((a, b) => (GameConstants.roleScores[b] ?? 0).compareTo(GameConstants.roleScores[a] ?? 0));
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: Text(
+          'ROYAL RULES & ROLES',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'GUESSING SEQUENCE',
+                style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              _guideRow('KING / రాజు', 'QUEEN / రాణి', Icons.arrow_forward_rounded),
+              _guideRow('QUEEN / రాణి', 'MINISTER / మంత్రి', Icons.arrow_forward_rounded),
+              _guideRow('MINISTER / మంత్రి', 'THIEF / దొంగ', Icons.arrow_forward_rounded),
+              const SizedBox(height: 16),
+              Text(
+                'ROLE HIERARCHY & SCORES',
+                style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ...sortedActiveRoles.map((role) {
+                final score = GameConstants.roleScores[role] ?? 0;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(role, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      Text('$score pts', style: const TextStyle(color: AppTheme.gold, fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
+                );
+              }).toList(),
+              if (activeRoles.any((r) => ['Guard', 'Fake Queen', 'Assassin'].contains(r))) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'SPECIAL ROLES',
+                  style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                if (activeRoles.contains('Guard')) _specialRoleDescription('GUARD', 'Can protect 1 player per round. If the protected player is guessed, it is counted as a wrong guess and roles are swapped with the Guard.'),
+                if (activeRoles.contains('Fake Queen')) _specialRoleDescription('FAKE QUEEN', 'Misleads the King. If the King guesses the Fake Queen, she gets a +600 points deception bonus and no role swap occurs.'),
+                if (activeRoles.contains('Assassin')) _specialRoleDescription('ASSASSIN', 'Can target 1 player. That player\'s score for the round is eliminated (set to 0).'),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CLOSE', style: TextStyle(color: AppTheme.gold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _specialRoleDescription(String role, String description) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppTheme.gold.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(role, style: const TextStyle(color: AppTheme.gold, fontSize: 10, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 4),
+          Text(description, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -45,8 +198,10 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+    if (state == AppLifecycleState.paused) {
       ref.read(gameProvider.notifier).updateOnlineStatus(false);
+    } else if (state == AppLifecycleState.detached) {
+      ref.read(gameProvider.notifier).leaveRoom();
     } else if (state == AppLifecycleState.resumed) {
       ref.read(gameProvider.notifier).updateOnlineStatus(true);
     }
@@ -129,7 +284,43 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
       });
     }
 
-    ref.listen(gameProvider, (previous, next) {
+    ref.listen<GameState>(gameProvider, (previous, next) {
+      if (previous?.currentRoom != null && next.currentRoom == null) {
+        if (mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('The room has been closed or you were removed.'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (next.currentRoom?.status == RoomStatus.waiting) {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => LobbyScreen(
+                roomId: next.currentRoom!.id,
+                isHost: next.currentRoom!.hostId == next.me?.id,
+              ),
+            ),
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('A key player left. Returning to lobby...'),
+              backgroundColor: Colors.orangeAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
       if (previous?.currentRoom == null || next.currentRoom == null) return;
       
       final pRoom = previous!.currentRoom!;
@@ -150,34 +341,42 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
       }
     });
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: AnimatedRajaRaniBackground(
-        child: Stack(
-          children: [
-            SafeArea(
-              child: Column(
-                children: [
-                  _buildHeader(room, me, players),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        _buildPlayArea(me, room, players),
-                        _buildGuessingGuide(players),
-                        _buildEmojiReactions(gameData.messages),
-                        if (_isFlying && _flyStart != null && _flyEnd != null)
-                          _buildFlyingCard(),
-                      ],
+    return PopScope<Object?>(
+      canPop: _isLeaving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        _showLeaveConfirmation();
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        body: AnimatedRajaRaniBackground(
+          child: Stack(
+            children: [
+              SafeArea(
+                child: Column(
+                  children: [
+                    _buildHeader(room, me, players),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          _buildPlayArea(me, room, players),
+                          _buildEmojiReactions(gameData.messages),
+                          if (_isFlying && _flyStart != null && _flyEnd != null)
+                            _buildFlyingCard(),
+                        ],
+                      ),
                     ),
-                  ),
-                  _buildBottomControls(me, room),
-                ],
+                    _buildBottomControls(me, room),
+                  ],
+                ),
               ),
-            ),
-            _buildEmojiSelector(),
-            _buildUserBadge(me),
-            _buildScoreboardButton(players),
-          ],
+              _buildEmojiSelector(),
+              _buildUserBadge(me),
+              _buildLeaveButton(),
+              _buildScoreboardButton(players),
+              _buildGuideButton(players),
+            ],
+          ),
         ),
       ),
     );
@@ -212,78 +411,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _buildGuessingGuide(List<PlayerModel> players) {
-    final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
-
-    return Positioned(
-      left: 20,
-      top: 100,
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'GUESSING GUIDE',
-              style: GoogleFonts.cinzel(
-                color: AppTheme.gold,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded),
-            _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded),
-            _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded),
-            if (activeRoles.any((r) => ['Guard', 'Fake Queen', 'Assassin'].contains(r))) ...[
-              const SizedBox(height: 12),
-              Container(height: 1, width: 120, color: Colors.white10),
-              const SizedBox(height: 8),
-              Text(
-                'SPECIAL ROLES',
-                style: GoogleFonts.cinzel(
-                  color: AppTheme.gold.withOpacity(0.8),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              if (activeRoles.contains('Guard')) _specialRoleHint('GUARD', 'Protect 1 player'),
-              if (activeRoles.contains('Fake Queen')) _specialRoleHint('FAKE QUEEN', 'Mislead the King'),
-              if (activeRoles.contains('Assassin')) _specialRoleHint('ASSASSIN', 'Cancel 1 player\'s pts'),
-            ]
-          ],
-        ),
-      ),
-    ).animate().fadeIn().slideX(begin: -0.2, end: 0);
-  }
-
-  Widget _specialRoleHint(String role, String hint) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.0),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-            decoration: BoxDecoration(
-              color: AppTheme.gold.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(3),
-            ),
-            child: Text(role, style: const TextStyle(color: AppTheme.gold, fontSize: 8, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(width: 6),
-          Text(hint, style: const TextStyle(color: Colors.white54, fontSize: 8)),
-        ],
-      ),
-    );
-  }
+  // Guessing Guide and special roles description are now handled in Rules & Roles dialog.
 
   Widget _guideRow(String from, String to, IconData icon) {
     return Padding(
@@ -317,13 +445,36 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   Widget _buildEmojiSelector() {
     final emojis = ['😂', '❤️', '🔥', '👍', '😮', '👑', '🤡', '💸'];
     return Positioned(
-      bottom: 120,
+      bottom: 100,
       right: 20,
       child: Column(
-        children: emojis.map((e) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: GestureDetector(
-            onTap: () => ref.read(gameProvider.notifier).sendMessage(e),
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (_isEmojiPanelOpen)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.black80,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: emojis.map((e) => GestureDetector(
+                  onTap: () {
+                    ref.read(gameProvider.notifier).sendMessage(e);
+                    setState(() => _isEmojiPanelOpen = false);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Text(e, style: const TextStyle(fontSize: 24)),
+                  ),
+                )).toList(),
+              ),
+            ).animate().scale(alignment: Alignment.bottomRight),
+          GestureDetector(
+            onTap: () => setState(() => _isEmojiPanelOpen = !_isEmojiPanelOpen),
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -331,12 +482,16 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                 shape: BoxShape.circle,
                 border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
               ),
-              child: Text(e, style: const TextStyle(fontSize: 20)),
+              child: Icon(
+                _isEmojiPanelOpen ? Icons.close_rounded : Icons.insert_emoticon_rounded,
+                color: AppTheme.gold,
+                size: 24,
+              ),
             ),
           ),
-        )).toList(),
+        ],
       ),
-    ).animate().slideX(begin: 1, end: 0);
+    );
   }
 
   Widget _buildEmojiReactions(List<MessageModel> messages) {
@@ -428,7 +583,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   Widget _buildUserBadge(PlayerModel? me) {
     return Positioned(
       top: 50,
-      right: 20,
+      right: 70,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
@@ -445,6 +600,44 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLeaveButton() {
+    return Positioned(
+      top: 50,
+      right: 20,
+      child: GestureDetector(
+        onTap: () => _showLeaveConfirmation(),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.redAccent.withOpacity(0.2),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+          ),
+          child: const Icon(Icons.exit_to_app_rounded, color: Colors.redAccent, size: 20),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuideButton(List<PlayerModel> players) {
+    return Positioned(
+      top: 50,
+      left: 70,
+      child: GestureDetector(
+        onTap: () => _showGuideDialog(players),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.black45,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
+          ),
+          child: const Icon(Icons.menu_book_rounded, color: AppTheme.gold, size: 20),
         ),
       ),
     );
@@ -524,27 +717,30 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
 
     if (isMyTurn) title = 'YOUR TURN TO GUESS!';
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppTheme.gold),
-        ).animate().fadeIn().scale(),
-        const SizedBox(height: 30),
-        _buildPlayersGrid(otherPlayers, isMyTurn, room?.kingId, room?.queenId, room?.ministerId, room?.status),
-        const SizedBox(height: 40),
-        Center(
-          child: ChitCard(
-            key: _myCardKey,
-            role: me?.currentRole ?? "...",
-            isRevealed: showMyCard,
-            onTap: () {
-              setState(() => _isMyCardRevealed = !_isMyCardRevealed);
-            },
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppTheme.gold),
+          ).animate().fadeIn().scale(),
+          const SizedBox(height: 20),
+          _buildPlayersGrid(otherPlayers, isMyTurn, room?.kingId, room?.queenId, room?.ministerId, room?.status),
+          const SizedBox(height: 30),
+          Center(
+            child: ChitCard(
+              key: _myCardKey,
+              role: me?.currentRole ?? "...",
+              isRevealed: showMyCard,
+              onTap: () {
+                setState(() => _isMyCardRevealed = !_isMyCardRevealed);
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -569,7 +765,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
         bool showMinisterBadge = isMinister && (status == RoomStatus.guessing_thief || status == RoomStatus.reveal);
 
         // Presence check
-        bool isOnline = player.isOnline;
+        bool isOnline = ref.read(gameProvider.notifier).isPlayerOnline(player);
 
         _playerKeys.putIfAbsent(player.id, () => GlobalKey());
         return GestureDetector(
