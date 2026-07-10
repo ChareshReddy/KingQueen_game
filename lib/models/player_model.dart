@@ -8,6 +8,8 @@ class PlayerModel {
   final bool isOnline;
   final String? currentRole;
   final bool isReady;
+  final bool guardUsedThisRound;
+  final bool assassinUsedThisRound;
 
   PlayerModel({
     required this.id,
@@ -19,6 +21,8 @@ class PlayerModel {
     this.isOnline = true,
     this.currentRole,
     this.isReady = false,
+    this.guardUsedThisRound = false,
+    this.assassinUsedThisRound = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -32,6 +36,8 @@ class PlayerModel {
       'isOnline': isOnline,
       'currentRole': currentRole,
       'isReady': isReady,
+      'guardUsedThisRound': guardUsedThisRound,
+      'assassinUsedThisRound': assassinUsedThisRound,
     };
   }
 
@@ -46,6 +52,8 @@ class PlayerModel {
       isOnline: map['isOnline'] ?? true,
       currentRole: map['currentRole'],
       isReady: map['isReady'] ?? false,
+      guardUsedThisRound: map['guardUsedThisRound'] ?? false,
+      assassinUsedThisRound: map['assassinUsedThisRound'] ?? false,
     );
   }
 
@@ -59,6 +67,8 @@ class PlayerModel {
     bool? isOnline,
     String? currentRole,
     bool? isReady,
+    bool? guardUsedThisRound,
+    bool? assassinUsedThisRound,
   }) {
     return PlayerModel(
       id: id ?? this.id,
@@ -70,6 +80,8 @@ class PlayerModel {
       isOnline: isOnline ?? this.isOnline,
       currentRole: currentRole ?? this.currentRole,
       isReady: isReady ?? this.isReady,
+      guardUsedThisRound: guardUsedThisRound ?? this.guardUsedThisRound,
+      assassinUsedThisRound: assassinUsedThisRound ?? this.assassinUsedThisRound,
     );
   }
 }
