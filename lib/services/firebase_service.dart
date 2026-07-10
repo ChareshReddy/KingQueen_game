@@ -61,6 +61,13 @@ class FirebaseService {
       if (!roomSnap.exists) throw Exception("Room not found");
       
       final playerIds = List<String>.from(roomSnap.get('playerIds') ?? []);
+      
+      // Block newcomers if the game has already started
+      final status = roomSnap.get('status') as String? ?? 'waiting';
+      if (status != 'waiting' && !playerIds.contains(player.id)) {
+        throw Exception("Game is already in progress in this room");
+      }
+      
       if (playerIds.length >= 10 && !playerIds.contains(player.id)) {
         throw Exception("Room is full (Max 10 players)");
       }
@@ -311,6 +318,58 @@ class FirebaseService {
       final hostId = roomSnap.get('hostId') as String;
 
       playerIds.remove(playerId);
+
+      final status = roomSnap.get('status') as String? ?? 'waiting';
+      if (status != 'waiting') {
+        if (playerIds.length < 4) {
+          // Reset to lobby if too few players remain
+          transaction.update(roomDoc, {
+            'status': 'waiting',
+            'kingId': null,
+            'queenId': null,
+            'ministerId': null,
+            'thiefId': null,
+            'guardProtectedId': null,
+            'assassinTargetId': null,
+            'fakeQueenDeceivedGuesserId': null,
+            'fakeQueenDeceivedTargetId': null,
+          });
+          for (var pId in playerIds) {
+            transaction.update(playersColl.doc(pId), {
+              'currentRole': null,
+              'isReady': false,
+              'guardUsedThisRound': false,
+              'assassinUsedThisRound': false,
+            });
+          }
+        } else if (status != 'reveal' && status != 'finished') {
+          // Dynamically skip guess turns if guessers went offline
+          final kingId = roomSnap.get('kingId') as String?;
+          final queenId = roomSnap.get('queenId') as String?;
+          final ministerId = roomSnap.get('ministerId') as String?;
+          final thiefId = roomSnap.get('thiefId') as String?;
+
+          String newStatus = status;
+
+          if (playerId == kingId) {
+            if (status == 'playing') {
+              newStatus = 'guessing_minister';
+            }
+          } else if (playerId == queenId) {
+            if (status == 'playing' || status == 'guessing_minister') {
+              newStatus = 'guessing_thief';
+            }
+          } else if (playerId == ministerId) {
+            newStatus = 'reveal';
+          } else if (playerId == thiefId) {
+            newStatus = 'reveal';
+          }
+
+          if (newStatus != status) {
+            transaction.update(roomDoc, {'status': newStatus});
+          }
+        }
+      }
 
       if (hostId == playerId) {
         if (playerIds.isNotEmpty) {

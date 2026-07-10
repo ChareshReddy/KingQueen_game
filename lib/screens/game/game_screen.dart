@@ -214,6 +214,24 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
 
   Widget _buildGuessingGuide(List<PlayerModel> players) {
     final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
+    final room = ref.watch(gameProvider).currentRoom;
+    final status = room?.status;
+
+    String guesserText = '';
+    String targetText = '';
+    if (status == RoomStatus.playing) {
+      final king = players.firstWhere((p) => p.currentRole == 'King', orElse: () => PlayerModel(id: '', name: 'King', avatarId: ''));
+      guesserText = king.name;
+      targetText = 'Queen';
+    } else if (status == RoomStatus.guessing_minister) {
+      final queen = players.firstWhere((p) => p.currentRole == 'Queen', orElse: () => PlayerModel(id: '', name: 'Queen', avatarId: ''));
+      guesserText = queen.name;
+      targetText = 'Minister';
+    } else if (status == RoomStatus.guessing_thief) {
+      final minister = players.firstWhere((p) => p.currentRole == 'Minister', orElse: () => PlayerModel(id: '', name: 'Minister', avatarId: ''));
+      guesserText = minister.name;
+      targetText = 'Thief';
+    }
 
     return Positioned(
       left: 20,
@@ -238,9 +256,47 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               ),
             ),
             const SizedBox(height: 10),
-            _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded),
-            _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded),
-            _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded),
+            _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded, highlight: status == RoomStatus.playing),
+            _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_minister),
+            _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_thief),
+            if (guesserText.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(height: 1, width: 120, color: Colors.white10),
+              const SizedBox(height: 8),
+              Text(
+                'ACTIVE GUESS',
+                style: GoogleFonts.cinzel(
+                  color: AppTheme.gold,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    guesserText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward, size: 10, color: AppTheme.gold),
+                  const SizedBox(width: 4),
+                  Text(
+                    targetText,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (activeRoles.any((r) => ['Guard', 'Fake Queen', 'Assassin'].contains(r))) ...[
               const SizedBox(height: 12),
               Container(height: 1, width: 120, color: Colors.white10),
@@ -285,14 +341,24 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _guideRow(String from, String to, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+  Widget _guideRow(String from, String to, IconData icon, {bool highlight = false}) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: highlight ? AppTheme.gold.withOpacity(0.15) : Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: highlight ? AppTheme.gold.withOpacity(0.3) : Colors.transparent,
+        ),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _roleSmallTag(from),
-          Icon(icon, size: 14, color: AppTheme.gold.withOpacity(0.5)),
+          const SizedBox(width: 4),
+          Icon(icon, size: 14, color: highlight ? AppTheme.gold : AppTheme.gold.withOpacity(0.5)),
+          const SizedBox(width: 4),
           _roleSmallTag(to),
         ],
       ),
