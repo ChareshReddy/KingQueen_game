@@ -1,0 +1,88 @@
+enum RoomStatus { waiting, dealing, playing, guessing_minister, guessing_thief, reveal, finished }
+
+class RoomModel {
+  final String id;
+  final String hostId;
+  final List<String> playerIds;
+  final RoomStatus status;
+  final int currentRound;
+  final String? kingId;
+  final String? queenId;
+  final String? ministerId;
+  final String? thiefId;
+  final DateTime createdAt;
+
+  RoomModel({
+    required this.id,
+    required this.hostId,
+    required this.playerIds,
+    this.status = RoomStatus.waiting,
+    this.currentRound = 1,
+    this.kingId,
+    this.queenId,
+    this.ministerId,
+    this.thiefId,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'hostId': hostId,
+      'playerIds': playerIds,
+      'status': status.name,
+      'currentRound': currentRound,
+      'kingId': kingId,
+      'queenId': queenId,
+      'ministerId': ministerId,
+      'thiefId': thiefId,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory RoomModel.fromMap(Map<String, dynamic> map) {
+    return RoomModel(
+      id: map['id'] ?? '',
+      hostId: map['hostId'] ?? '',
+      playerIds: List<String>.from(map['playerIds'] ?? []),
+      status: RoomStatus.values.firstWhere(
+        (e) => e.name == (map['status'] ?? 'waiting'),
+        orElse: () => RoomStatus.waiting,
+      ),
+      currentRound: map['currentRound'] ?? 1,
+      kingId: map['kingId'],
+      queenId: map['queenId'],
+      ministerId: map['ministerId'],
+      thiefId: map['thiefId'],
+      createdAt: map['createdAt'] != null 
+          ? DateTime.parse(map['createdAt']) 
+          : DateTime.now(),
+    );
+  }
+
+  RoomModel copyWith({
+    String? id,
+    String? hostId,
+    List<String>? playerIds,
+    RoomStatus? status,
+    int? currentRound,
+    String? kingId,
+    String? queenId,
+    String? ministerId,
+    String? thiefId,
+    DateTime? createdAt,
+  }) {
+    return RoomModel(
+      id: id ?? this.id,
+      hostId: hostId ?? this.hostId,
+      playerIds: playerIds ?? this.playerIds,
+      status: status ?? this.status,
+      currentRound: currentRound ?? this.currentRound,
+      kingId: kingId ?? this.kingId,
+      queenId: queenId ?? this.queenId,
+      ministerId: ministerId ?? this.ministerId,
+      thiefId: thiefId ?? this.thiefId,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+}
