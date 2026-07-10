@@ -9,7 +9,6 @@ import 'package:king_queen/models/room_model.dart';
 import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/widgets/chit_card.dart';
 import 'package:king_queen/widgets/gold_button.dart';
-import 'package:king_queen/widgets/animated_raja_rani_background.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
@@ -158,12 +157,12 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
             SafeArea(
               child: Column(
                 children: [
-                  _buildHeader(room),
+                  _buildHeader(room, me, players),
                   Expanded(
                     child: Stack(
                       children: [
                         _buildPlayArea(me, room, players),
-                        _buildGuessingGuide(),
+                        _buildGuessingGuide(players),
                         _buildEmojiReactions(gameData.messages),
                         if (_isFlying && _flyStart != null && _flyEnd != null)
                           _buildFlyingCard(),
@@ -174,11 +173,31 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                 ],
               ),
             ),
-            _buildEmojiSelector(),
-            _buildUserBadge(me),
-            _buildScoreboardButton(players),
-          ],
-        ),
+          ),
+          
+          SafeArea(
+            child: Column(
+              children: [
+                 _buildHeader(room, me, players),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      _buildPlayArea(me, room, players),
+                      _buildGuessingGuide(players),
+                      _buildEmojiReactions(gameData.messages),
+                      if (_isFlying && _flyStart != null && _flyEnd != null)
+                        _buildFlyingCard(),
+                    ],
+                  ),
+                ),
+                _buildBottomControls(me, room),
+              ],
+            ),
+          ),
+          _buildEmojiSelector(),
+          _buildUserBadge(me),
+          _buildScoreboardButton(players),
+        ],
       ),
     );
   }
@@ -696,14 +715,9 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     if (isReveal && isHost) {
       return Container(
         padding: const EdgeInsets.all(20),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: GoldButton(
-              text: 'START NEXT ROUND',
-              onPressed: () => ref.read(gameProvider.notifier).startNextRound(),
-            ),
-          ),
+        child: GoldButton(
+          text: 'START NEXT ROUND',
+          onPressed: () => ref.read(gameProvider.notifier).startNextRound(),
         ),
       );
     }
@@ -716,24 +730,19 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
 
     return Container(
       padding: const EdgeInsets.all(20),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GoldButton(
-                text: 'SUBMIT GUESS',
-                onPressed: _selectedPlayerId == null 
-                  ? null
-                  : () {
-                      ref.read(gameProvider.notifier).makeGuess(_selectedPlayerId!);
-                      setState(() => _selectedPlayerId = null);
-                    },
-              ),
-            ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GoldButton(
+            text: 'SUBMIT GUESS',
+            onPressed: _selectedPlayerId == null 
+              ? null
+              : () {
+                  ref.read(gameProvider.notifier).makeGuess(_selectedPlayerId!);
+                  setState(() => _selectedPlayerId = null);
+                },
           ),
-        ),
+        ],
       ),
     );
   }

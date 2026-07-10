@@ -6,7 +6,6 @@ import 'package:king_queen/core/theme/app_theme.dart';
 import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/screens/home/home_screen.dart';
 import 'package:king_queen/widgets/gold_button.dart';
-import 'package:king_queen/widgets/animated_raja_rani_background.dart';
 
 enum AuthMode { login, signup, anonymous }
 
@@ -30,7 +29,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: AnimatedRajaRaniBackground(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.center,
+            radius: 1.5,
+            colors: [
+              AppTheme.gold.withOpacity(0.05),
+              Colors.transparent,
+            ],
+          ),
+        ),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
@@ -47,14 +56,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 32),
                   _buildSubmitButton(),
                   const SizedBox(height: 40),
-                  Text(
-                    'Developed by -Cherry😉',
-                    style: GoogleFonts.outfit(
-                      color: AppTheme.gold.withOpacity(0.7),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 1.5,
-                    ),
+                  Column(
+                    children: [
+                      Text(
+                        'Developed by -Cherry😉',
+                        style: GoogleFonts.outfit(
+                          color: AppTheme.gold.withOpacity(0.7),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Designed by- Bunny🙄',
+                        style: GoogleFonts.outfit(
+                          color: AppTheme.gold.withOpacity(0.7),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
