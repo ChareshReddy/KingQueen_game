@@ -158,12 +158,12 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
             SafeArea(
               child: Column(
                 children: [
-                  _buildHeader(room),
+                  _buildHeader(room, me, players),
                   Expanded(
                     child: Stack(
                       children: [
                         _buildPlayArea(me, room, players),
-                        _buildGuessingGuide(),
+                        _buildGuessingGuide(players),
                         _buildEmojiReactions(gameData.messages),
                         if (_isFlying && _flyStart != null && _flyEnd != null)
                           _buildFlyingCard(),

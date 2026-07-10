@@ -66,16 +66,16 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('ROOM: $roomId'),
+            Text('ROOM: ${widget.roomId}'),
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.copy_rounded, color: AppTheme.gold, size: 20),
               tooltip: 'Copy Room Code',
               onPressed: () {
-                Clipboard.setData(ClipboardData(text: roomId));
+                Clipboard.setData(ClipboardData(text: widget.roomId));
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Room code $roomId copied!'),
+                    content: Text('Room code ${widget.roomId} copied!'),
                     duration: const Duration(seconds: 2),
                     behavior: SnackBarBehavior.floating,
                   ),
@@ -116,7 +116,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                     },
                   ),
                 ),
-                _buildBottomPanel(context, ref, isHost, players),
+                _buildBottomPanel(context, ref, widget.isHost, players, room, gameData.me),
               ],
             ),
           ),
