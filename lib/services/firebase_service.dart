@@ -110,7 +110,13 @@ class FirebaseService {
       switch (player.currentRole) {
         case 'King': roundScore = 1000; break;
         case 'Queen': roundScore = 900; break;
-        case 'Minister': roundScore = 500; break;
+        case 'Minister': roundScore = 800; break;
+        case 'Spy': roundScore = 700; break;
+        case 'Joker': roundScore = 600; break;
+        case 'Guard': roundScore = 500; break;
+        case 'Fake Queen': roundScore = 400; break;
+        case 'Assassin': roundScore = 300; break;
+        case 'Commander': roundScore = 200; break;
         case 'Thief': roundScore = 0; break;
       }
       

@@ -146,14 +146,10 @@ class GameNotifier extends Notifier<GameState> {
   }
 
   List<String> _getRolesForPlayerCount(int count) {
-    List<String> roles = ['King', 'Queen', 'Minister', 'Thief'];
-    if (count >= 5) roles.add('Spy');
-    if (count >= 6) roles.add('Joker');
-    if (count >= 7) roles.add('Guard');
-    if (count >= 8) roles.add('Fake Queen');
-    if (count >= 9) roles.add('Assassin');
-    if (count >= 10) roles.add('Commander');
-    return roles.sublist(0, count);
+    List<String> pool = ['King', 'Queen', 'Minister', 'Spy', 'Joker', 'Guard', 'Fake Queen', 'Assassin', 'Commander'];
+    List<String> roles = pool.sublist(0, count - 1);
+    roles.add('Thief');
+    return roles;
   }
 
   void makeGuess(String guessedPlayerId) async {
