@@ -201,12 +201,6 @@ class FirebaseService {
               roundScore = 0; // Score eliminated by Assassin
             } else {
               roundScore = GameConstants.roleScores[role] ?? 0;
-              // Commander double score check
-              // DESIGN CHOICE: Doubling points (base 200 * 2 = 400) is a one-way bet for a modest gain.
-              // An alternative would be guess redirection, but doubling points is a solid self-target bluff reward.
-              if (role == 'Commander' && player.commanderDoubleScore) {
-                roundScore *= 2;
-              }
             }
             
             scores[player.id] = roundScore;
@@ -337,12 +331,6 @@ class FirebaseService {
     });
   }
 
-  Future<void> useSpyAbility(String roomId, String spyId) async {
-    await _db.collection('rooms').doc(roomId).collection('players').doc(spyId).update({
-      'spyUsedThisRound': true,
-    });
-  }
-
   Future<void> protectPlayer(String roomId, String guardId, String targetId) async {
     final batch = _db.batch();
     batch.update(_db.collection('rooms').doc(roomId), {
@@ -380,8 +368,6 @@ class FirebaseService {
       'thiefId': null,
       'guardProtectedId': null,
       'assassinTargetId': null,
-      'jokerBluffRole': null,
-      'jokerBluffPlayerId': null,
       'fakeQueenDeceivedGuesserId': null,
       'fakeQueenDeceivedTargetId': null,
     });
@@ -390,12 +376,8 @@ class FirebaseService {
       batch.update(roomRef.collection('players').doc(id), {
         'currentRole': null,
         'isReady': false,
-        'spyUsedThisRound': false,
         'guardUsedThisRound': false,
         'assassinUsedThisRound': false,
-        'jokerUsedThisRound': false,
-        'commanderUsedThisRound': false,
-        'commanderDoubleScore': false,
       });
     }
 
@@ -404,30 +386,6 @@ class FirebaseService {
     }
 
     await batch.commit();
-  }
-
-  Future<void> useJokerAbility(String roomId, String jokerId, String fakeRole) async {
-    final batch = _db.batch();
-    final roomRef = _db.collection('rooms').doc(roomId);
-    final playerRef = roomRef.collection('players').doc(jokerId);
-
-    batch.update(roomRef, {
-      'jokerBluffRole': fakeRole,
-      'jokerBluffPlayerId': jokerId,
-    });
-
-    batch.update(playerRef, {
-      'jokerUsedThisRound': true,
-    });
-
-    await batch.commit();
-  }
-
-  Future<void> useCommanderAbility(String roomId, String commanderId) async {
-    await _db.collection('rooms').doc(roomId).collection('players').doc(commanderId).update({
-      'commanderUsedThisRound': true,
-      'commanderDoubleScore': true,
-    });
   }
 
   Future<void> updatePlayerOnlineStatus(String roomId, String playerId, bool isOnline) async {

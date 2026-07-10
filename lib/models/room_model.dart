@@ -12,8 +12,6 @@ class RoomModel {
   final String? thiefId;
   final String? guardProtectedId;
   final String? assassinTargetId;
-  final String? jokerBluffRole;
-  final String? jokerBluffPlayerId;
   final String? fakeQueenDeceivedGuesserId;
   final String? fakeQueenDeceivedTargetId;
   final DateTime createdAt;
@@ -30,8 +28,6 @@ class RoomModel {
     this.thiefId,
     this.guardProtectedId,
     this.assassinTargetId,
-    this.jokerBluffRole,
-    this.jokerBluffPlayerId,
     this.fakeQueenDeceivedGuesserId,
     this.fakeQueenDeceivedTargetId,
     required this.createdAt,
@@ -50,8 +46,6 @@ class RoomModel {
       'thiefId': thiefId,
       'guardProtectedId': guardProtectedId,
       'assassinTargetId': assassinTargetId,
-      'jokerBluffRole': jokerBluffRole,
-      'jokerBluffPlayerId': jokerBluffPlayerId,
       'fakeQueenDeceivedGuesserId': fakeQueenDeceivedGuesserId,
       'fakeQueenDeceivedTargetId': fakeQueenDeceivedTargetId,
       'createdAt': createdAt.toIso8601String(),
@@ -74,8 +68,6 @@ class RoomModel {
       thiefId: map['thiefId'],
       guardProtectedId: map['guardProtectedId'],
       assassinTargetId: map['assassinTargetId'],
-      jokerBluffRole: map['jokerBluffRole'],
-      jokerBluffPlayerId: map['jokerBluffPlayerId'],
       fakeQueenDeceivedGuesserId: map['fakeQueenDeceivedGuesserId'],
       fakeQueenDeceivedTargetId: map['fakeQueenDeceivedTargetId'],
       createdAt: map['createdAt'] != null 
@@ -96,8 +88,6 @@ class RoomModel {
     String? thiefId,
     String? guardProtectedId,
     String? assassinTargetId,
-    String? jokerBluffRole,
-    String? jokerBluffPlayerId,
     String? fakeQueenDeceivedGuesserId,
     String? fakeQueenDeceivedTargetId,
     DateTime? createdAt,
@@ -114,8 +104,6 @@ class RoomModel {
       thiefId: thiefId ?? this.thiefId,
       guardProtectedId: guardProtectedId ?? this.guardProtectedId,
       assassinTargetId: assassinTargetId ?? this.assassinTargetId,
-      jokerBluffRole: jokerBluffRole ?? this.jokerBluffRole,
-      jokerBluffPlayerId: jokerBluffPlayerId ?? this.jokerBluffPlayerId,
       fakeQueenDeceivedGuesserId: fakeQueenDeceivedGuesserId ?? this.fakeQueenDeceivedGuesserId,
       fakeQueenDeceivedTargetId: fakeQueenDeceivedTargetId ?? this.fakeQueenDeceivedTargetId,
       createdAt: createdAt ?? this.createdAt,

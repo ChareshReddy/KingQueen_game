@@ -249,7 +249,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
             _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded),
             _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded),
             _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded),
-            if (activeRoles.any((r) => ['Spy', 'Guard', 'Fake Queen', 'Assassin', 'Commander', 'Joker'].contains(r))) ...[
+            if (activeRoles.any((r) => ['Guard', 'Fake Queen', 'Assassin'].contains(r))) ...[
               const SizedBox(height: 12),
               Container(height: 1, width: 120, color: Colors.white10),
               const SizedBox(height: 8),
@@ -262,12 +262,9 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                 ),
               ),
               const SizedBox(height: 4),
-              if (activeRoles.contains('Spy')) _specialRoleHint('SPY', 'Secretly see 1 card'),
               if (activeRoles.contains('Guard')) _specialRoleHint('GUARD', 'Protect 1 player'),
               if (activeRoles.contains('Fake Queen')) _specialRoleHint('FAKE QUEEN', 'Mislead the King'),
               if (activeRoles.contains('Assassin')) _specialRoleHint('ASSASSIN', 'Cancel 1 player\'s pts'),
-              if (activeRoles.contains('Joker')) _specialRoleHint('JOKER', 'Bluff your identity'),
-              if (activeRoles.contains('Commander')) _specialRoleHint('COMMANDER', 'Double your score'),
             ]
           ],
         ),
@@ -546,48 +543,13 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
         _buildPlayersGrid(otherPlayers, isMyTurn, room?.kingId, room?.queenId, room?.ministerId, room?.status),
         const SizedBox(height: 40),
         Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ChitCard(
-                key: _myCardKey,
-                role: me?.currentRole ?? "...",
-                isRevealed: showMyCard,
-                onTap: () {
-                  setState(() => _isMyCardRevealed = !_isMyCardRevealed);
-                },
-              ),
-              if (me != null && (room?.status == RoomStatus.playing || room?.status == RoomStatus.guessing_minister || room?.status == RoomStatus.guessing_thief)) ...[
-                if (me.currentRole == 'Joker' && !me.jokerUsedThisRound) ...[
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () => _showJokerBluffDialog(context),
-                    icon: const Icon(Icons.theater_comedy, color: Colors.purpleAccent, size: 18),
-                    label: const Text('BLUFF IDENTITY', style: TextStyle(color: Colors.purpleAccent, fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.surface,
-                      side: const BorderSide(color: Colors.purpleAccent, width: 1.5),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                  ),
-                ],
-                if (me.currentRole == 'Commander' && !me.commanderUsedThisRound) ...[
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () => _confirmCommanderDoubleDown(context),
-                    icon: const Icon(Icons.military_tech, color: AppTheme.gold, size: 18),
-                    label: const Text('DOUBLE DOWN', style: TextStyle(color: AppTheme.gold, fontSize: 12, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.surface,
-                      side: const BorderSide(color: AppTheme.gold, width: 1.5),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                  ),
-                ],
-              ],
-            ],
+          child: ChitCard(
+            key: _myCardKey,
+            role: me?.currentRole ?? "...",
+            isRevealed: showMyCard,
+            onTap: () {
+              setState(() => _isMyCardRevealed = !_isMyCardRevealed);
+            },
           ),
         ),
       ],
@@ -699,31 +661,8 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               if (showMinisterBadge)
                 const Text('MINISTER / మంత్రి', style: TextStyle(fontSize: 8, color: AppTheme.gold)),
               
-              // Joker bluff claims tag
-              if (room?.jokerBluffPlayerId == player.id && room?.jokerBluffRole != null)
-                Container(
-                  margin: const EdgeInsets.only(top: 2),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.purpleAccent.withOpacity(0.5)),
-                  ),
-                  child: Text(
-                    'Claims: ${room!.jokerBluffRole!.toUpperCase()}',
-                    style: const TextStyle(fontSize: 8, color: Colors.purpleAccent, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              
               // Ability action buttons
               if (me != null && (status == RoomStatus.playing || status == RoomStatus.guessing_minister || status == RoomStatus.guessing_thief)) ...[
-                if (me.currentRole == 'Spy' && !me.spyUsedThisRound)
-                  TextButton.icon(
-                    onPressed: () => _confirmAndUseSpy(context, player),
-                    icon: const Icon(Icons.visibility, size: 12, color: Colors.blueAccent),
-                    label: const Text('REVEAL', style: TextStyle(fontSize: 8, color: Colors.blueAccent)),
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                  ),
                 if (me.currentRole == 'Guard' && !me.guardUsedThisRound)
                   TextButton.icon(
                     onPressed: () => _useGuardAbility(context, player),
@@ -797,66 +736,6 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     );
   }
 
-  void _confirmAndUseSpy(BuildContext context, PlayerModel target) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: const Text('USE SPY ABILITY', style: TextStyle(color: AppTheme.gold)),
-        content: Text('Do you want to secretly view ${target.name}\'s role chit?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL'),
-          ),
-          GoldButton(
-            text: 'REVEAL',
-            onPressed: () async {
-              Navigator.pop(context);
-              await ref.read(gameProvider.notifier).useSpyAbility(target.id);
-              if (context.mounted) {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    backgroundColor: AppTheme.surface,
-                    title: const Text('SPY REVEAL', style: TextStyle(color: AppTheme.gold)),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.visibility, size: 50, color: AppTheme.gold),
-                        const SizedBox(height: 16),
-                        Text(
-                          '${target.name}\'s role is:',
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          (target.currentRole ?? 'Thief').toUpperCase(),
-                          style: GoogleFonts.cinzel(
-                            color: AppTheme.gold,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                      ],
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('DISMISS', style: TextStyle(color: AppTheme.gold)),
-                      ),
-                    ],
-                  ),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   void _useGuardAbility(BuildContext context, PlayerModel target) async {
     await ref.read(gameProvider.notifier).protectPlayer(target.id);
     if (context.mounted) {
@@ -879,92 +758,6 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
         ),
       );
     }
-  }
-
-  void _showJokerBluffDialog(BuildContext context) {
-    final roles = ['King', 'Queen', 'Minister', 'Spy', 'Joker', 'Guard', 'Fake Queen', 'Assassin', 'Commander', 'Thief'];
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: Text(
-          'CHOOSE FAKE ROLE TO BLUFF',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: roles.length,
-            itemBuilder: (context, index) {
-              final role = roles[index];
-              return ListTile(
-                title: Text(role.toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                trailing: const Icon(Icons.arrow_forward_ios, color: AppTheme.gold, size: 14),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await ref.read(gameProvider.notifier).useJokerAbility(role);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('You are now bluffing as: ${role.toUpperCase()}!'),
-                        backgroundColor: Colors.purple,
-                      ),
-                    );
-                  }
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL', style: TextStyle(color: Colors.white54)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmCommanderDoubleDown(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: Text(
-          'DOUBLE DOWN POINTS',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Do you want to double your score for this round if you survive? (Doubles Commander score to 400 pts).\n\nNOTE: This is a one-way bet for this round.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL', style: TextStyle(color: Colors.white54)),
-          ),
-          GoldButton(
-            text: 'CONFIRM',
-            onPressed: () async {
-              Navigator.pop(context);
-              await ref.read(gameProvider.notifier).useCommanderAbility();
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Commander double down activated!'),
-                    backgroundColor: AppTheme.gold,
-                  ),
-                );
-              }
-            },
-          ),
-        ],
-      ),
-    );
   }
 
 }
