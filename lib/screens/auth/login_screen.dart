@@ -6,6 +6,7 @@ import 'package:king_queen/core/theme/app_theme.dart';
 import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/screens/home/home_screen.dart';
 import 'package:king_queen/widgets/gold_button.dart';
+import 'package:king_queen/widgets/animated_raja_rani_background.dart';
 
 enum AuthMode { login, signup, anonymous }
 
@@ -29,55 +30,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.center,
-            radius: 1.5,
-            colors: [
-              AppTheme.gold.withOpacity(0.05),
-              Colors.transparent,
-            ],
-          ),
-        ),
+      body: AnimatedRajaRaniBackground(
         child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildLogo().animate().fadeIn(duration: 800.ms).slideY(begin: 0.2, end: 0),
-                const SizedBox(height: 40),
-                _buildModeToggle(),
-                const SizedBox(height: 32),
-                _buildFields(),
-                const SizedBox(height: 32),
-                _buildSubmitButton(),
-                const SizedBox(height: 40),
-                Column(
-                  children: [
-                    Text(
-                      'Developed by -Cherry😉',
-                      style: GoogleFonts.outfit(
-                        color: AppTheme.gold.withOpacity(0.7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 1.5,
-                      ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildLogo().animate().fadeIn(duration: 800.ms).slideY(begin: 0.2, end: 0),
+                  const SizedBox(height: 40),
+                  _buildModeToggle(),
+                  const SizedBox(height: 32),
+                  _buildFields(),
+                  const SizedBox(height: 32),
+                  _buildSubmitButton(),
+                  const SizedBox(height: 40),
+                  Text(
+                    'Developed by -Cherry😉',
+                    style: GoogleFonts.outfit(
+                      color: AppTheme.gold.withOpacity(0.7),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1.5,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Designed by- Bunny🙄',
-                      style: GoogleFonts.outfit(
-                        color: AppTheme.gold.withOpacity(0.7),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -10,82 +10,86 @@ class RulesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(context),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionTitle('THE STANDARD FLOW'),
-                  _buildRuleStep(
-                    '1',
-                    'Everyone Checks Their Role',
-                    'Players secretly look at their assigned role on their digital chit card.',
-                    Icons.lock_outline_rounded,
-                  ),
-                  _buildRuleStep(
-                    '2',
-                    'King Reveals Himself',
-                    'The King is automatically revealed to everyone. The King gets 1000 points.',
-                    Icons.workspace_premium_rounded,
-                  ),
-                  _buildRuleStep(
-                    '3',
-                    'King Must Find the Queen',
-                    'The King guesses who the Queen is. If correct, Queen gets 900 points. If wrong, they swap identities!',
-                    Icons.search_rounded,
-                  ),
-                  _buildRuleStep(
-                    '4',
-                    'Queen\'s Turn',
-                    'Once found, the Queen guesses who the Minister is. If correct, Minister gets 800 points. If wrong, they swap identities!',
-                    Icons.diamond_rounded,
-                  ),
-                  _buildRuleStep(
-                    '5',
-                    'Minister Finds the Thief',
-                    'The Minister identifies the Thief. If correct, they keep their points. If wrong, they swap with the Thief!',
-                    Icons.gavel_rounded,
-                  ),
-                  
-                  const SizedBox(height: 40),
-                  _buildSectionTitle('POINT SYSTEM'),
-                  _buildPointTable(),
-                  
-                  const SizedBox(height: 40),
-                  _buildSectionTitle('ADVANCED ROLES (5+ PLAYERS)'),
-                  _buildRoleInfo('SPY (5+ Players)', 'Can secretly see one player\'s card.', Icons.visibility),
-                  _buildRoleInfo('JOKER (6+ Players)', 'Can lie or change game rules.', Icons.theater_comedy),
-                  _buildRoleInfo('GUARD (7+ Players)', 'Protects one player from being guessed.', Icons.shield),
-                  _buildRoleInfo('FAKE QUEEN (8+ Players)', 'Misleads the King during his turn.', Icons.face_retouching_natural),
-                  _buildRoleInfo('ASSASSIN (9+ Players)', 'Can eliminate a player\'s score for the round.', Icons.person_remove_rounded),
-                  _buildRoleInfo('COMMANDER (10+ Players)', 'Supports the military structure of the kingdom.', Icons.military_tech),
-                  
-                  const SizedBox(height: 40),
-                  _buildSectionTitle('STRATEGIES'),
-                  _buildStrategyBox('AS KING', 'Watch reactions carefully. Don’t guess too fast.'),
-                  _buildStrategyBox('AS QUEEN', 'Observe who avoids eye contact or looks nervous.'),
-                  _buildStrategyBox('AS THIEF', 'Stay calm and don\'t overact when others are guessing.'),
-                  
-                  const SizedBox(height: 60),
-                  Center(
-                    child: Opacity(
-                      opacity: 0.3,
-                      child: Text(
-                        'KING QUEEN - ROYAL RULES',
-                        style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 12, letterSpacing: 2),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: CustomScrollView(
+            slivers: [
+              _buildAppBar(context),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionTitle('THE STANDARD FLOW'),
+                      _buildRuleStep(
+                        '1',
+                        'Everyone Checks Their Role',
+                        'Players secretly look at their assigned role on their digital chit card.',
+                        Icons.lock_outline_rounded,
                       ),
-                    ),
+                      _buildRuleStep(
+                        '2',
+                        'King Reveals Himself',
+                        'The King is automatically revealed to everyone. The King gets 1000 points.',
+                        Icons.workspace_premium_rounded,
+                      ),
+                      _buildRuleStep(
+                        '3',
+                        'King Must Find the Queen',
+                        'The King guesses who the Queen is. If correct, Queen gets 900 points. If wrong, they swap identities!',
+                        Icons.search_rounded,
+                      ),
+                      _buildRuleStep(
+                        '4',
+                        'Queen\'s Turn',
+                        'Once found, the Queen guesses who the Minister is. If correct, Minister gets 500 points. If wrong, they swap identities!',
+                        Icons.diamond_rounded,
+                      ),
+                      _buildRuleStep(
+                        '5',
+                        'Minister Finds the Thief',
+                        'The Minister identifies the Thief. If correct, they keep their points. If wrong, they swap with the Thief!',
+                        Icons.gavel_rounded,
+                      ),
+                      
+                      const SizedBox(height: 40),
+                      _buildSectionTitle('POINT SYSTEM'),
+                      _buildPointTable(),
+                      
+                      const SizedBox(height: 40),
+                      _buildSectionTitle('ADVANCED ROLES (6+ PLAYERS)'),
+                      _buildRoleInfo('SPY', 'Can secretly see one player\'s card.', Icons.visibility),
+                      _buildRoleInfo('JOKER', 'Can lie or change game rules.', Icons.theater_comedy),
+                      _buildRoleInfo('GUARD', 'Protects one player from being guessed.', Icons.shield),
+                      _buildRoleInfo('FAKE QUEEN', 'Misleads the King during his turn.', Icons.face_retouching_natural),
+                      _buildRoleInfo('ASSASSIN', 'Can eliminate a player\'s score for the round.', Icons.person_remove_rounded),
+                      
+                      const SizedBox(height: 40),
+                      _buildSectionTitle('STRATEGIES'),
+                      _buildStrategyBox('AS KING', 'Watch reactions carefully. Don’t guess too fast.'),
+                      _buildStrategyBox('AS QUEEN', 'Observe who avoids eye contact or looks nervous.'),
+                      _buildStrategyBox('AS THIEF', 'Stay calm and don\'t overact when others are guessing.'),
+                      
+                      const SizedBox(height: 60),
+                      Center(
+                        child: Opacity(
+                          opacity: 0.3,
+                          child: Text(
+                            'KING QUEEN - ROYAL RULES',
+                            style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 12, letterSpacing: 2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                    ],
                   ),
-                  const SizedBox(height: 40),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
