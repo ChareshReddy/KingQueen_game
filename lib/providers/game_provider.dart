@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:king_queen/models/message_model.dart';
 import 'package:king_queen/models/player_model.dart';
@@ -189,6 +190,7 @@ class GameNotifier extends Notifier<GameState> {
       guessedPlayerId: guessedPlayerId,
       currentRole: me.currentRole ?? '',
     );
+    await refreshMe();
   }
 
   Future<void> toggleReady() async {
@@ -217,7 +219,28 @@ class GameNotifier extends Notifier<GameState> {
     if (state.currentRoom == null || state.me == null) return;
     await _service.useAssassinAbility(state.currentRoom!.id, state.me!.id, targetPlayerId);
   }
+  Future<void> useJokerAbility(String fakeRole) async {
+    if (state.currentRoom == null || state.me == null) return;
+    await _service.useJokerAbility(state.currentRoom!.id, state.me!.id, fakeRole);
+  }
 
+  Future<void> useCommanderAbility() async {
+    if (state.currentRoom == null || state.me == null) return;
+    await _service.useCommanderAbility(state.currentRoom!.id, state.me!.id);
+  }
+
+  Future<void> refreshMe() async {
+    if (state.me == null) return;
+    final userSnap = await FirebaseFirestore.instance.collection('users').doc(state.me!.id).get();
+    if (userSnap.exists) {
+      final data = userSnap.data()!;
+      final updatedMe = state.me!.copyWith(
+        totalScore: data['totalScore'] ?? 0,
+        wins: data['wins'] ?? 0,
+      );
+      state = state.copyWith(me: updatedMe);
+    }
+  }
   Future<void> startNextRound() async {
     if (state.currentRoom == null) return;
     await _service.resetRound(state.currentRoom!.id, state.players.map((p) => p.id).toList());

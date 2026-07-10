@@ -54,14 +54,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 32),
                 _buildSubmitButton(),
                 const SizedBox(height: 40),
-                Text(
-                  'Developed by -Cherry😉',
-                  style: GoogleFonts.outfit(
-                    color: AppTheme.gold.withOpacity(0.7),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.5,
-                  ),
+                Column(
+                  children: [
+                    Text(
+                      'Developed by -Cherry😉',
+                      style: GoogleFonts.outfit(
+                        color: AppTheme.gold.withOpacity(0.7),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Designed by- Bunny🙄',
+                      style: GoogleFonts.outfit(
+                        color: AppTheme.gold.withOpacity(0.7),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

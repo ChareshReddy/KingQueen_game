@@ -60,13 +60,26 @@ class HomeScreen extends ConsumerWidget {
             _buildBottomStats(context, ref, me),
             const SizedBox(height: 20),
             Center(
-              child: Text(
-                'Developed by -Cherry😉',
-                style: TextStyle(
-                  color: AppTheme.gold.withOpacity(0.5),
-                  fontSize: 12,
-                  letterSpacing: 1,
-                ),
+              child: Column(
+                children: [
+                  Text(
+                    'Developed by -Cherry😉',
+                    style: TextStyle(
+                      color: AppTheme.gold.withOpacity(0.5),
+                      fontSize: 12,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Designed by- Bunny🙄',
+                    style: TextStyle(
+                      color: AppTheme.gold.withOpacity(0.5),
+                      fontSize: 12,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

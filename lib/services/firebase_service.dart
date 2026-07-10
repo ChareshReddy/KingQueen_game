@@ -115,7 +115,7 @@ class FirebaseService {
     final roomRef = _db.collection('rooms').doc(roomId);
     final playersColl = roomRef.collection('players');
 
-    await _db.runTransaction((transaction) async {
+    final result = await _db.runTransaction((transaction) async {
       final roomSnap = await transaction.get(roomRef);
       if (!roomSnap.exists) throw Exception("Room not found");
       
@@ -166,7 +166,7 @@ class FirebaseService {
         if (roleField != null) {
           transaction.update(roomRef, {roleField: guardPlayer.id});
         }
-        return; // Penalty applied, end transaction
+        return null; // Penalty applied, end transaction
       }
 
       // Determine if the guess is correct
@@ -188,6 +188,8 @@ class FirebaseService {
           final playersSnap = await playersColl.get();
           final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
           
+          final Map<String, int> scores = {};
+          int maxScore = -1;
           for (var player in players) {
             int roundScore = 0;
             // The guesser (Minister) was successful, so they get their full score.
@@ -199,15 +201,31 @@ class FirebaseService {
               roundScore = 0; // Score eliminated by Assassin
             } else {
               roundScore = GameConstants.roleScores[role] ?? 0;
+              // Commander double score check
+              // DESIGN CHOICE: Doubling points (base 200 * 2 = 400) is a one-way bet for a modest gain.
+              // An alternative would be guess redirection, but doubling points is a solid self-target bluff reward.
+              if (role == 'Commander' && player.commanderDoubleScore) {
+                roundScore *= 2;
+              }
             }
             
+            scores[player.id] = roundScore;
+            if (roundScore > maxScore) {
+              maxScore = roundScore;
+            }
+
             transaction.update(playersColl.doc(player.id), {
               'totalScore': FieldValue.increment(roundScore),
             });
           }
+          return {
+            'isReveal': true,
+            'scores': scores,
+            'maxScore': maxScore,
+          };
         }
       } else {
-        // Incorrect guess: swap roles with the wrongly accused player (including Fake Queen decoy)
+        // Incorrect guess: check if King guessed Fake Queen
         final guesserRef = playersColl.doc(guesserId);
         final otherRef = playersColl.doc(guessedPlayerId);
 
@@ -217,6 +235,21 @@ class FirebaseService {
         final guesserRole = guesserSnap.get('currentRole');
         final otherRole = otherSnap.get('currentRole');
 
+        if (otherRole == 'Fake Queen' && guesserRole == 'King') {
+          // DESIGN CHOICE: Fake Queen successfully deceives the King!
+          // Deception bonus: base (400) + 200 bonus = 600 points total.
+          // King remains King and guesses again, no role swap occurs.
+          transaction.update(otherRef, {
+            'totalScore': FieldValue.increment(600),
+          });
+          transaction.update(roomRef, {
+            'fakeQueenDeceivedGuesserId': guesserId,
+            'fakeQueenDeceivedTargetId': guessedPlayerId,
+          });
+          return null;
+        }
+
+        // Standard incorrect guess: swap roles with the wrongly accused player
         transaction.update(guesserRef, {'currentRole': otherRole});
         transaction.update(otherRef, {'currentRole': guesserRole});
 
@@ -241,7 +274,29 @@ class FirebaseService {
           transaction.update(roomRef, {otherField: guesserId});
         }
       }
+      return null;
     });
+
+    if (result != null && result['isReveal'] == true) {
+      final scores = Map<String, int>.from(result['scores'] as Map);
+      final maxScore = result['maxScore'] as int;
+
+      final batch = _db.batch();
+      scores.forEach((playerId, roundScore) {
+        // Exclude bots and only update if player scored points
+        // DESIGN CHOICE: A player is considered a winner of the round if they score the highest points.
+        // In this case, we increment their lifetime wins in the users collection.
+        if (!playerId.startsWith('bot_')) {
+          final userRef = _db.collection('users').doc(playerId);
+          final isWinner = roundScore == maxScore;
+          batch.update(userRef, {
+            'totalScore': FieldValue.increment(roundScore),
+            if (isWinner) 'wins': FieldValue.increment(1),
+          });
+        }
+      });
+      await batch.commit();
+    }
   }
 
   Future<void> updatePlayerReady(String roomId, String playerId, bool isReady) async {
@@ -325,6 +380,10 @@ class FirebaseService {
       'thiefId': null,
       'guardProtectedId': null,
       'assassinTargetId': null,
+      'jokerBluffRole': null,
+      'jokerBluffPlayerId': null,
+      'fakeQueenDeceivedGuesserId': null,
+      'fakeQueenDeceivedTargetId': null,
     });
 
     for (var id in playerIds) {
@@ -334,6 +393,9 @@ class FirebaseService {
         'spyUsedThisRound': false,
         'guardUsedThisRound': false,
         'assassinUsedThisRound': false,
+        'jokerUsedThisRound': false,
+        'commanderUsedThisRound': false,
+        'commanderDoubleScore': false,
       });
     }
 
@@ -342,6 +404,30 @@ class FirebaseService {
     }
 
     await batch.commit();
+  }
+
+  Future<void> useJokerAbility(String roomId, String jokerId, String fakeRole) async {
+    final batch = _db.batch();
+    final roomRef = _db.collection('rooms').doc(roomId);
+    final playerRef = roomRef.collection('players').doc(jokerId);
+
+    batch.update(roomRef, {
+      'jokerBluffRole': fakeRole,
+      'jokerBluffPlayerId': jokerId,
+    });
+
+    batch.update(playerRef, {
+      'jokerUsedThisRound': true,
+    });
+
+    await batch.commit();
+  }
+
+  Future<void> useCommanderAbility(String roomId, String commanderId) async {
+    await _db.collection('rooms').doc(roomId).collection('players').doc(commanderId).update({
+      'commanderUsedThisRound': true,
+      'commanderDoubleScore': true,
+    });
   }
 
   Future<void> updatePlayerOnlineStatus(String roomId, String playerId, bool isOnline) async {

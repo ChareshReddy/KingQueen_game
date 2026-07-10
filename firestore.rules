@@ -1,3 +1,10 @@
+// NOTE: Since this is a client-authoritative game without a dedicated backend server,
+// certain field updates (like scores and roles) are initiated by clients. For complete
+// security against malicious client modification, score/role mutation logic should be
+// moved server-side (e.g., using Cloud Functions). The constraints below provide a
+// partial mitigation by restricting player updates to their own documents and preventing
+// direct self-modification of sensitive fields (totalScore, currentRole).
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -27,9 +34,19 @@ service cloud.firestore {
       // Players subcollection
       match /players/{playerId} {
         allow read: if isAuthenticated();
-        // Allow write if the user is in the room or host
-        allow write, update, delete: if isAuthenticated() && (
+        allow create: if isAuthenticated() && (
           request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds ||
+          request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId
+        );
+        allow update: if isAuthenticated() && (
+          // Host can modify anything (initial role deal, resets, etc.)
+          request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId ||
+          // Non-host players can only update their own document, and cannot directly alter score or role fields
+          (request.auth.uid == playerId && 
+           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalScore', 'currentRole']))
+        );
+        allow delete: if isAuthenticated() && (
+          request.auth.uid == playerId ||
           request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId
         );
       }

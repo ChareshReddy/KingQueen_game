@@ -11,6 +11,9 @@ class PlayerModel {
   final bool spyUsedThisRound;
   final bool guardUsedThisRound;
   final bool assassinUsedThisRound;
+  final bool jokerUsedThisRound;
+  final bool commanderUsedThisRound;
+  final bool commanderDoubleScore;
 
   PlayerModel({
     required this.id,
@@ -25,6 +28,9 @@ class PlayerModel {
     this.spyUsedThisRound = false,
     this.guardUsedThisRound = false,
     this.assassinUsedThisRound = false,
+    this.jokerUsedThisRound = false,
+    this.commanderUsedThisRound = false,
+    this.commanderDoubleScore = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -41,6 +47,9 @@ class PlayerModel {
       'spyUsedThisRound': spyUsedThisRound,
       'guardUsedThisRound': guardUsedThisRound,
       'assassinUsedThisRound': assassinUsedThisRound,
+      'jokerUsedThisRound': jokerUsedThisRound,
+      'commanderUsedThisRound': commanderUsedThisRound,
+      'commanderDoubleScore': commanderDoubleScore,
     };
   }
 
@@ -58,6 +67,9 @@ class PlayerModel {
       spyUsedThisRound: map['spyUsedThisRound'] ?? false,
       guardUsedThisRound: map['guardUsedThisRound'] ?? false,
       assassinUsedThisRound: map['assassinUsedThisRound'] ?? false,
+      jokerUsedThisRound: map['jokerUsedThisRound'] ?? false,
+      commanderUsedThisRound: map['commanderUsedThisRound'] ?? false,
+      commanderDoubleScore: map['commanderDoubleScore'] ?? false,
     );
   }
 
@@ -74,6 +86,9 @@ class PlayerModel {
     bool? spyUsedThisRound,
     bool? guardUsedThisRound,
     bool? assassinUsedThisRound,
+    bool? jokerUsedThisRound,
+    bool? commanderUsedThisRound,
+    bool? commanderDoubleScore,
   }) {
     return PlayerModel(
       id: id ?? this.id,
@@ -88,6 +103,9 @@ class PlayerModel {
       spyUsedThisRound: spyUsedThisRound ?? this.spyUsedThisRound,
       guardUsedThisRound: guardUsedThisRound ?? this.guardUsedThisRound,
       assassinUsedThisRound: assassinUsedThisRound ?? this.assassinUsedThisRound,
+      jokerUsedThisRound: jokerUsedThisRound ?? this.jokerUsedThisRound,
+      commanderUsedThisRound: commanderUsedThisRound ?? this.commanderUsedThisRound,
+      commanderDoubleScore: commanderDoubleScore ?? this.commanderDoubleScore,
     );
   }
 }
