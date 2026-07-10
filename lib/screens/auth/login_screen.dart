@@ -6,6 +6,7 @@ import 'package:king_queen/core/theme/app_theme.dart';
 import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/screens/home/home_screen.dart';
 import 'package:king_queen/widgets/gold_button.dart';
+import 'package:king_queen/widgets/animated_raja_rani_background.dart';
 
 enum AuthMode { login, signup, anonymous }
 
@@ -29,17 +30,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.center,
-            radius: 1.5,
-            colors: [
-              AppTheme.gold.withOpacity(0.05),
-              Colors.transparent,
-            ],
-          ),
-        ),
+      body: AnimatedRajaRaniBackground(
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
