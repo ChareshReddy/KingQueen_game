@@ -82,8 +82,12 @@ class FirebaseService {
     });
   }
 
-  Stream<RoomModel> streamRoom(String roomId) {
-    return _db.collection('rooms').doc(roomId).snapshots().map((snap) => RoomModel.fromMap(snap.data()!));
+  Stream<RoomModel?> streamRoom(String roomId) {
+    return _db.collection('rooms').doc(roomId).snapshots().map((snap) {
+      final data = snap.data();
+      if (data == null) return null;
+      return RoomModel.fromMap(data);
+    });
   }
 
   Stream<List<PlayerModel>> streamPlayers(String roomId) {
@@ -314,8 +318,12 @@ class FirebaseService {
       final roomSnap = await transaction.get(roomDoc);
       if (!roomSnap.exists) return;
 
+      // Get all players for role resetting if game resets to waiting
+      final playersSnap = await playersColl.get();
+
       final playerIds = List<String>.from(roomSnap.get('playerIds') ?? []);
       final hostId = roomSnap.get('hostId') as String;
+      final statusStr = roomSnap.get('status') as String;
 
       playerIds.remove(playerId);
 
@@ -374,18 +382,53 @@ class FirebaseService {
       if (hostId == playerId) {
         if (playerIds.isNotEmpty) {
           final newHostId = playerIds.first;
-          transaction.update(roomDoc, {
-            'hostId': newHostId,
-            'playerIds': playerIds,
-          });
+          updates['hostId'] = newHostId;
           transaction.update(playersColl.doc(newHostId), {'isHost': true});
         } else {
           transaction.delete(roomDoc);
+          for (var doc in playersSnap.docs) {
+            transaction.delete(doc.reference);
+          }
+          return;
         }
-      } else {
-        transaction.update(roomDoc, {'playerIds': playerIds});
       }
 
+      // Check if game was in progress and needs to reset
+      if (statusStr != 'waiting') {
+        final kingId = roomSnap.data()!.containsKey('kingId') ? roomSnap.get('kingId') as String? : null;
+        final queenId = roomSnap.data()!.containsKey('queenId') ? roomSnap.get('queenId') as String? : null;
+        final ministerId = roomSnap.data()!.containsKey('ministerId') ? roomSnap.get('ministerId') as String? : null;
+        final thiefId = roomSnap.data()!.containsKey('thiefId') ? roomSnap.get('thiefId') as String? : null;
+
+        final isKeyRoleLeft = playerId == kingId || playerId == queenId || playerId == ministerId || playerId == thiefId;
+
+        // If player count is less than 4 or a key role player left, reset to lobby
+        if (playerIds.length < 4 || isKeyRoleLeft) {
+          updates['status'] = 'waiting';
+          updates['kingId'] = null;
+          updates['queenId'] = null;
+          updates['ministerId'] = null;
+          updates['thiefId'] = null;
+          updates['guardProtectedId'] = null;
+          updates['assassinTargetId'] = null;
+          updates['fakeQueenDeceivedGuesserId'] = null;
+          updates['fakeQueenDeceivedTargetId'] = null;
+
+          // Reset all remaining players' roles and ready status
+          for (var doc in playersSnap.docs) {
+            if (doc.id != playerId) {
+              transaction.update(doc.reference, {
+                'currentRole': null,
+                'isReady': false,
+                'guardUsedThisRound': false,
+                'assassinUsedThisRound': false,
+              });
+            }
+          }
+        }
+      }
+
+      transaction.update(roomDoc, updates);
       transaction.delete(playersColl.doc(playerId));
     });
   }
@@ -450,6 +493,13 @@ class FirebaseService {
   Future<void> updatePlayerOnlineStatus(String roomId, String playerId, bool isOnline) async {
     await _db.collection('rooms').doc(roomId).collection('players').doc(playerId).update({
       'isOnline': isOnline,
+    });
+  }
+
+  Future<void> updatePlayerHeartbeat(String roomId, String playerId) async {
+    await _db.collection('rooms').doc(roomId).collection('players').doc(playerId).update({
+      'lastSeen': DateTime.now().toIso8601String(),
+      'isOnline': true,
     });
   }
 

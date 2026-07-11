@@ -15,22 +15,26 @@ class GoldButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isEnabled = onPressed != null && !isLoading;
     return Container(
       width: double.infinity,
       height: 56,
       decoration: BoxDecoration(
-        gradient: AppTheme.goldGradient,
+        gradient: isEnabled ? AppTheme.goldGradient : null,
+        color: isEnabled ? null : Colors.white10,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.gold.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: isEnabled
+            ? [
+                BoxShadow(
+                  color: AppTheme.gold.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
       child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
+        onPressed: isEnabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
@@ -40,8 +44,8 @@ class GoldButton extends StatelessWidget {
             ? const CircularProgressIndicator(color: Colors.black)
             : Text(
                 text,
-                style: const TextStyle(
-                  color: Colors.black,
+                style: TextStyle(
+                  color: isEnabled ? Colors.black : Colors.white24,
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                   letterSpacing: 1.2,

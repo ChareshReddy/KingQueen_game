@@ -7,7 +7,6 @@ import 'package:king_queen/models/room_model.dart';
 import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/screens/game/game_screen.dart';
 import 'package:king_queen/widgets/gold_button.dart';
-import 'package:flutter/services.dart';
 import 'package:king_queen/widgets/animated_raja_rani_background.dart';
 
 class LobbyScreen extends ConsumerStatefulWidget {
@@ -21,6 +20,35 @@ class LobbyScreen extends ConsumerStatefulWidget {
 }
 
 class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingObserver {
+  bool _isLeaving = false;
+
+  Future<void> _leaveLobby(BuildContext context) async {
+    if (_isLeaving) return;
+    setState(() {
+      _isLeaving = true;
+    });
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await ref.read(gameProvider.notifier).leaveRoom();
+      if (mounted) {
+        navigator.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLeaving = false;
+        });
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Error leaving room: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -37,8 +65,10 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+    if (state == AppLifecycleState.paused) {
       ref.read(gameProvider.notifier).updateOnlineStatus(false);
+    } else if (state == AppLifecycleState.detached) {
+      ref.read(gameProvider.notifier).leaveRoom();
     } else if (state == AppLifecycleState.resumed) {
       ref.read(gameProvider.notifier).updateOnlineStatus(true);
     }
@@ -46,6 +76,21 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<GameState>(gameProvider, (previous, next) {
+      if (previous?.currentRoom != null && next.currentRoom == null) {
+        if (mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('The room has been closed or you were removed.'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    });
+
     final gameData = ref.watch(gameProvider);
     final players = gameData.players;
     final room = gameData.currentRoom;
@@ -61,7 +106,13 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
       });
     }
 
-    return Scaffold(
+    return PopScope<Object?>(
+      canPop: _isLeaving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _leaveLobby(context);
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -116,13 +167,13 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                     },
                   ),
                 ),
-                _buildBottomPanel(context, ref, widget.isHost, players, room, gameData.me),
+                _buildBottomPanel(context, ref, room?.hostId == gameData.me?.id, players, room, gameData.me),
               ],
             ),
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildInfoBanner() {
@@ -220,9 +271,9 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                     children: [
                       GoldButton(
                         text: 'START GAME',
-                        onPressed: players.length >= 4 
+                        onPressed: allReady 
                           ? () => ref.read(gameProvider.notifier).startGame()
-                          : () {}, // Empty callback instead of null if GoldButton requires non-null
+                          : null,
                       ),
                       const SizedBox(height: 12),
                       SizedBox(
@@ -245,12 +296,12 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                   )
                 else
                   GoldButton(
-                    text: 'READY',
-                    onPressed: () {},
+                    text: me?.isReady == true ? 'UNREADY' : 'READY',
+                    onPressed: () => ref.read(gameProvider.notifier).toggleReady(),
                   ),
                 const SizedBox(height: 12),
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => _leaveLobby(context),
                   child: const Text('LEAVE ROOM', style: TextStyle(color: Colors.redAccent)),
                 ),
               ],
