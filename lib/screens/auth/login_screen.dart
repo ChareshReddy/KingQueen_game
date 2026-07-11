@@ -88,6 +88,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           fit: BoxFit.contain,
         ),
         const SizedBox(height: 10),
+        Text(
+          'RajaRani',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.cinzel(
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.gold,
+            letterSpacing: 4,
+          ),
+        ),
+        const SizedBox(height: 20),
       ],
     );
   }

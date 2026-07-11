@@ -843,16 +843,31 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               Text('$myScore', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
             ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppTheme.gold),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'ROUND ${room?.currentRound ?? 1}',
-              style: const TextStyle(color: AppTheme.gold, fontWeight: FontWeight.bold),
-            ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'RajaRani',
+                style: GoogleFonts.cinzel(
+                  color: AppTheme.gold.withOpacity(0.8),
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppTheme.gold),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'ROUND ${room?.currentRound ?? 1}',
+                  style: const TextStyle(color: AppTheme.gold, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,

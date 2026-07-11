@@ -362,6 +362,7 @@ class FirebaseService {
       final statusStr = roomSnap.get('status') as String;
 
       playerIds.remove(playerId);
+      final Map<String, dynamic> updates = {'playerIds': playerIds};
 
       final status = roomSnap.get('status') as String? ?? 'waiting';
       if (status != 'waiting') {
