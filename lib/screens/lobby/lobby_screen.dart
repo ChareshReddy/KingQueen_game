@@ -8,6 +8,7 @@ import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/screens/game/game_screen.dart';
 import 'package:king_queen/widgets/gold_button.dart';
 import 'package:king_queen/widgets/animated_raja_rani_background.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class LobbyScreen extends ConsumerStatefulWidget {
   final String roomId;
@@ -118,12 +119,24 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
       child: Scaffold(
       appBar: AppBar(
         title: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Text('ROOM: ${widget.roomId}'),
-            const SizedBox(width: 8),
+            Text(
+              'RajaRani',
+              style: GoogleFonts.cinzel(
+                color: AppTheme.gold,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              'ROOM: ${widget.roomId}',
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(width: 4),
             IconButton(
-              icon: const Icon(Icons.copy_rounded, color: AppTheme.gold, size: 20),
+              icon: const Icon(Icons.copy_rounded, color: AppTheme.gold, size: 16),
               tooltip: 'Copy Room Code',
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: widget.roomId));

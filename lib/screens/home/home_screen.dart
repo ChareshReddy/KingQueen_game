@@ -19,7 +19,24 @@ class HomeScreen extends ConsumerWidget {
     final me = gameData.me;
     return Scaffold(
       appBar: AppBar(
-        title: Text('${me?.name.toUpperCase() ?? "PLAYER"} DASHBOARD'),
+        title: Row(
+          children: [
+            Text(
+              'RajaRani',
+              style: GoogleFonts.cinzel(
+                color: AppTheme.gold,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              me?.name.toUpperCase() ?? "PLAYER",
+              style: const TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             onPressed: () => _showSettingsDialog(context),
