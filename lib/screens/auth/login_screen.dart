@@ -83,21 +83,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Column(
       children: [
         Image.asset(
-          'assets/images/raja_rani_logo.png',
-          height: 140,
+          'assets/images/logo.png',
+          height: 180,
           fit: BoxFit.contain,
         ),
         const SizedBox(height: 10),
-        Text(
-          'KING QUEEN',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.cinzel(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.gold,
-            letterSpacing: 4,
-          ),
-        ),
       ],
     );
   }

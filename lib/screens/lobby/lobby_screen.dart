@@ -7,7 +7,6 @@ import 'package:king_queen/models/room_model.dart';
 import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/screens/game/game_screen.dart';
 import 'package:king_queen/widgets/gold_button.dart';
-import 'package:flutter/services.dart';
 import 'package:king_queen/widgets/animated_raja_rani_background.dart';
 
 class LobbyScreen extends ConsumerStatefulWidget {
@@ -168,7 +167,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                     },
                   ),
                 ),
-                _buildBottomPanel(context, ref, widget.isHost, players, room, gameData.me),
+                _buildBottomPanel(context, ref, room?.hostId == gameData.me?.id, players, room, gameData.me),
               ],
             ),
           ),
@@ -272,9 +271,9 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                     children: [
                       GoldButton(
                         text: 'START GAME',
-                        onPressed: players.length >= 4 
+                        onPressed: allReady 
                           ? () => ref.read(gameProvider.notifier).startGame()
-                          : () {}, // Empty callback instead of null if GoldButton requires non-null
+                          : null,
                       ),
                       const SizedBox(height: 12),
                       SizedBox(

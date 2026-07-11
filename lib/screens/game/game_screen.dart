@@ -10,6 +10,8 @@ import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/widgets/chit_card.dart';
 import 'package:king_queen/widgets/gold_button.dart';
 import 'package:king_queen/widgets/animated_raja_rani_background.dart';
+import 'package:king_queen/screens/lobby/lobby_screen.dart';
+import 'package:king_queen/core/constants/game_constants.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
@@ -635,7 +637,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               margin: const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
-                color: Colors.black80,
+                color: Colors.black.withOpacity(0.8),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
               ),
