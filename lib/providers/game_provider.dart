@@ -139,6 +139,7 @@ class GameNotifier extends Notifier<GameState> {
       } else {
         state = state.copyWith(currentRoom: room);
         _checkAndTriggerAutoGuess();
+        _checkAndTriggerAutoStart();
       }
     });
     _playersSubscription = _service.streamPlayers(roomId).listen((players) {
@@ -223,6 +224,26 @@ class GameNotifier extends Notifier<GameState> {
         _makeAutoGuess(currentRoom, activeGuesserId!, currentRole!);
       });
     }
+  }
+
+  void _checkAndTriggerAutoStart() {
+    final room = state.currentRoom;
+    if (room == null || room.status != RoomStatus.dealing) return;
+
+    final onlinePlayers = state.players.where((p) => isPlayerOnline(p) && !p.id.startsWith('bot_')).toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+
+    if (onlinePlayers.isEmpty || onlinePlayers.first.id != state.me?.id) {
+      return;
+    }
+
+    // Coordinator triggers startGame after 1 second delay
+    Future.delayed(const Duration(seconds: 1), () {
+      final currentRoom = state.currentRoom;
+      if (currentRoom != null && currentRoom.status == RoomStatus.dealing) {
+        startGame();
+      }
+    });
   }
 
   void _makeAutoGuess(RoomModel room, String guesserId, String currentRole) {
