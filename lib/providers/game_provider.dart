@@ -44,9 +44,10 @@ class GameState {
 
 class GameNotifier extends Notifier<GameState> {
   late FirebaseService _service;
-  StreamSubscription<RoomModel>? _roomSubscription;
+  StreamSubscription<RoomModel?>? _roomSubscription;
   StreamSubscription<List<PlayerModel>>? _playersSubscription;
   StreamSubscription<List<MessageModel>>? _messagesSubscription;
+  Timer? _heartbeatTimer;
 
   @override
   GameState build() {
@@ -61,9 +62,11 @@ class GameNotifier extends Notifier<GameState> {
     _roomSubscription?.cancel();
     _playersSubscription?.cancel();
     _messagesSubscription?.cancel();
+    _heartbeatTimer?.cancel();
     _roomSubscription = null;
     _playersSubscription = null;
     _messagesSubscription = null;
+    _heartbeatTimer = null;
   }
 
   Future<void> login(String name) async {
@@ -130,7 +133,13 @@ class GameNotifier extends Notifier<GameState> {
     _cancelSubscriptions();
 
     _roomSubscription = _service.streamRoom(roomId).listen((room) {
-      state = state.copyWith(currentRoom: room);
+      if (room == null) {
+        _cancelSubscriptions();
+        state = GameState(me: state.me);
+      } else {
+        state = state.copyWith(currentRoom: room);
+        _checkAndTriggerAutoGuess();
+      }
     });
     _playersSubscription = _service.streamPlayers(roomId).listen((players) {
       state = state.copyWith(players: players);
@@ -150,6 +159,105 @@ class GameNotifier extends Notifier<GameState> {
     _messagesSubscription = _service.streamMessages(roomId).listen((messages) {
       state = state.copyWith(messages: messages);
     });
+
+    _startHeartbeatTimer(roomId);
+  }
+
+  void _startHeartbeatTimer(String roomId) {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (state.currentRoom != null && state.me != null) {
+        _service.updatePlayerHeartbeat(state.currentRoom!.id, state.me!.id);
+      }
+    });
+  }
+
+  bool isPlayerOnline(PlayerModel player) {
+    if (player.id.startsWith('bot_')) return true;
+    if (player.lastSeen == null) return player.isOnline;
+    final diff = DateTime.now().difference(player.lastSeen!);
+    return player.isOnline && diff.inSeconds < 15;
+  }
+
+  void _checkAndTriggerAutoGuess() {
+    final room = state.currentRoom;
+    if (room == null) return;
+
+    if (room.status != RoomStatus.playing &&
+        room.status != RoomStatus.guessing_minister &&
+        room.status != RoomStatus.guessing_thief) {
+      return;
+    }
+
+    final onlinePlayers = state.players.where((p) => isPlayerOnline(p) && !p.id.startsWith('bot_')).toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+
+    if (onlinePlayers.isEmpty || onlinePlayers.first.id != state.me?.id) {
+      return;
+    }
+
+    String? activeGuesserId;
+    String? currentRole;
+    if (room.status == RoomStatus.playing) {
+      activeGuesserId = room.kingId;
+      currentRole = 'King';
+    } else if (room.status == RoomStatus.guessing_minister) {
+      activeGuesserId = room.queenId;
+      currentRole = 'Queen';
+    } else if (room.status == RoomStatus.guessing_thief) {
+      activeGuesserId = room.ministerId;
+      currentRole = 'Minister';
+    }
+
+    if (activeGuesserId == null || currentRole == null) return;
+
+    final activePlayer = state.players.firstWhere(
+      (p) => p.id == activeGuesserId,
+      orElse: () => PlayerModel(id: '', name: '', avatarId: ''),
+    );
+    if (activePlayer.id.isEmpty) return;
+
+    final isBot = activePlayer.id.startsWith('bot_');
+    final isOffline = !isPlayerOnline(activePlayer);
+
+    if (isBot || isOffline) {
+      final targetStatus = room.status;
+      final targetRound = room.currentRound;
+      Future.delayed(const Duration(seconds: 3), () {
+        final currentRoom = state.currentRoom;
+        if (currentRoom == null ||
+            currentRoom.status != targetStatus ||
+            currentRoom.currentRound != targetRound) {
+          return;
+        }
+        _makeAutoGuess(currentRoom, activeGuesserId!, currentRole!);
+      });
+    }
+  }
+
+  void _makeAutoGuess(RoomModel room, String guesserId, String currentRole) {
+    final List<String> excludedIds = [room.kingId ?? ''];
+    if (currentRole == 'Queen' || currentRole == 'Minister') {
+      excludedIds.add(room.queenId ?? '');
+    }
+    if (currentRole == 'Minister') {
+      excludedIds.add(room.ministerId ?? '');
+    }
+
+    final candidates = state.players
+        .where((p) => !excludedIds.contains(p.id))
+        .toList();
+
+    if (candidates.isEmpty) return;
+
+    final randomCandidate = candidates[Random().nextInt(candidates.length)];
+
+    _service.resolveGuess(
+      roomId: room.id,
+      guesserId: guesserId,
+      guessedPlayerId: randomCandidate.id,
+      currentRole: currentRole,
+    );
   }
 
   Future<void> startGame() async {

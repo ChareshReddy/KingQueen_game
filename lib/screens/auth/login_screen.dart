@@ -82,18 +82,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget _buildLogo() {
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: AppTheme.gold, width: 2),
-            boxShadow: [
-              BoxShadow(color: AppTheme.gold.withOpacity(0.3), blurRadius: 20, spreadRadius: 5),
-            ],
-          ),
-          child: const Icon(Icons.castle_rounded, color: AppTheme.gold, size: 60),
+        Image.asset(
+          'assets/images/raja_rani_logo.png',
+          height: 140,
+          fit: BoxFit.contain,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
         Text(
           'KING QUEEN',
           textAlign: TextAlign.center,

@@ -10,6 +10,7 @@ class PlayerModel {
   final bool isReady;
   final bool guardUsedThisRound;
   final bool assassinUsedThisRound;
+  final DateTime? lastSeen;
 
   PlayerModel({
     required this.id,
@@ -23,6 +24,7 @@ class PlayerModel {
     this.isReady = false,
     this.guardUsedThisRound = false,
     this.assassinUsedThisRound = false,
+    this.lastSeen,
   });
 
   Map<String, dynamic> toMap() {
@@ -38,6 +40,7 @@ class PlayerModel {
       'isReady': isReady,
       'guardUsedThisRound': guardUsedThisRound,
       'assassinUsedThisRound': assassinUsedThisRound,
+      'lastSeen': lastSeen?.toIso8601String(),
     };
   }
 
@@ -54,6 +57,7 @@ class PlayerModel {
       isReady: map['isReady'] ?? false,
       guardUsedThisRound: map['guardUsedThisRound'] ?? false,
       assassinUsedThisRound: map['assassinUsedThisRound'] ?? false,
+      lastSeen: map['lastSeen'] != null ? DateTime.parse(map['lastSeen']) : null,
     );
   }
 
@@ -69,6 +73,7 @@ class PlayerModel {
     bool? isReady,
     bool? guardUsedThisRound,
     bool? assassinUsedThisRound,
+    DateTime? lastSeen,
   }) {
     return PlayerModel(
       id: id ?? this.id,
@@ -82,6 +87,7 @@ class PlayerModel {
       isReady: isReady ?? this.isReady,
       guardUsedThisRound: guardUsedThisRound ?? this.guardUsedThisRound,
       assassinUsedThisRound: assassinUsedThisRound ?? this.assassinUsedThisRound,
+      lastSeen: lastSeen ?? this.lastSeen,
     );
   }
 }
