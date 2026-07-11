@@ -1,4 +1,4 @@
-enum RoomStatus { waiting, dealing, playing, guessing_minister, guessing_thief, reveal, finished }
+enum RoomStatus { waiting, dealing, guessing, reveal, finished }
 
 class RoomModel {
   final String id;
@@ -6,6 +6,7 @@ class RoomModel {
   final List<String> playerIds;
   final RoomStatus status;
   final int currentRound;
+  final int guessStageIndex;
   final String? kingId;
   final String? queenId;
   final String? ministerId;
@@ -22,6 +23,7 @@ class RoomModel {
     required this.playerIds,
     this.status = RoomStatus.waiting,
     this.currentRound = 1,
+    this.guessStageIndex = 0,
     this.kingId,
     this.queenId,
     this.ministerId,
@@ -40,6 +42,7 @@ class RoomModel {
       'playerIds': playerIds,
       'status': status.name,
       'currentRound': currentRound,
+      'guessStageIndex': guessStageIndex,
       'kingId': kingId,
       'queenId': queenId,
       'ministerId': ministerId,
@@ -62,6 +65,7 @@ class RoomModel {
         orElse: () => RoomStatus.waiting,
       ),
       currentRound: map['currentRound'] ?? 1,
+      guessStageIndex: map['guessStageIndex'] ?? 0,
       kingId: map['kingId'],
       queenId: map['queenId'],
       ministerId: map['ministerId'],
@@ -82,6 +86,7 @@ class RoomModel {
     List<String>? playerIds,
     RoomStatus? status,
     int? currentRound,
+    int? guessStageIndex,
     String? kingId,
     String? queenId,
     String? ministerId,
@@ -98,6 +103,7 @@ class RoomModel {
       playerIds: playerIds ?? this.playerIds,
       status: status ?? this.status,
       currentRound: currentRound ?? this.currentRound,
+      guessStageIndex: guessStageIndex ?? this.guessStageIndex,
       kingId: kingId ?? this.kingId,
       queenId: queenId ?? this.queenId,
       ministerId: ministerId ?? this.ministerId,
