@@ -808,13 +808,16 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   }
 
   Widget _buildScoreboardButton(List<PlayerModel> players) {
+    final double width = MediaQuery.of(context).size.width;
+    final bool isPhone = width < 480;
+
     return Positioned(
-      top: 50,
-      left: 20,
+      top: isPhone ? 40 : 50,
+      left: isPhone ? 16 : 20,
       child: GestureDetector(
         onTap: () => _showScoreboard(players),
         child: Container(
-          padding: const EdgeInsets.all(8),
+          padding: EdgeInsets.all(isPhone ? 12 : 8),
           decoration: BoxDecoration(
             color: Colors.black45,
             shape: BoxShape.circle,
@@ -870,23 +873,32 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   }
 
   Widget _buildUserBadge(PlayerModel? me) {
+    final double width = MediaQuery.of(context).size.width;
+    final bool isPhone = width < 480;
+
     return Positioned(
-      top: 50,
-      right: 70,
+      top: isPhone ? 40 : 50,
+      right: isPhone ? 68 : 70,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        constraints: BoxConstraints(maxWidth: isPhone ? 100 : 160),
+        padding: EdgeInsets.symmetric(horizontal: isPhone ? 8 : 12, vertical: isPhone ? 5 : 6),
         decoration: BoxDecoration(
           color: Colors.black45,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.person, size: 14, color: AppTheme.gold),
+            Icon(Icons.person, size: isPhone ? 12 : 14, color: AppTheme.gold),
             const SizedBox(width: 8),
-            Text(
-              me?.name.toUpperCase() ?? '...',
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+            Flexible(
+              child: Text(
+                me?.name.toUpperCase() ?? '...',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: TextStyle(fontSize: isPhone ? 8 : 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+              ),
             ),
           ],
         ),
@@ -895,13 +907,16 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   }
 
   Widget _buildLeaveButton() {
+    final double width = MediaQuery.of(context).size.width;
+    final bool isPhone = width < 480;
+
     return Positioned(
-      top: 50,
-      right: 20,
+      top: isPhone ? 40 : 50,
+      right: isPhone ? 16 : 20,
       child: GestureDetector(
         onTap: () => _showLeaveConfirmation(),
         child: Container(
-          padding: const EdgeInsets.all(8),
+          padding: EdgeInsets.all(isPhone ? 12 : 8),
           decoration: BoxDecoration(
             color: Colors.redAccent.withOpacity(0.2),
             shape: BoxShape.circle,
@@ -914,13 +929,16 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   }
 
   Widget _buildGuideButton(List<PlayerModel> players) {
+    final double width = MediaQuery.of(context).size.width;
+    final bool isPhone = width < 480;
+
     return Positioned(
-      top: 50,
-      left: 70,
+      top: isPhone ? 40 : 50,
+      left: isPhone ? 68 : 70,
       child: GestureDetector(
         onTap: () => _showGuideDialog(players),
         child: Container(
-          padding: const EdgeInsets.all(8),
+          padding: EdgeInsets.all(isPhone ? 12 : 8),
           decoration: BoxDecoration(
             color: Colors.black45,
             shape: BoxShape.circle,
