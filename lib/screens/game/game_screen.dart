@@ -536,6 +536,13 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
         guesserText = '...';
       }
       targetText = 'Thief';
+    } else if (status == RoomStatus.reveal) {
+      final thief = players.firstWhere(
+        (p) => p.currentRole == 'Thief',
+        orElse: () => PlayerModel(id: '', name: '', avatarId: ''),
+      );
+      guesserText = 'Round complete';
+      targetText = thief.name.isNotEmpty ? 'Thief was ${thief.name}' : 'No Thief';
     }
 
     return Positioned(
@@ -583,7 +590,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               Container(height: 1, width: double.infinity, color: Colors.white10),
               SizedBox(height: isPhone ? 4 : (isMobile ? 6 : 8)),
               Text(
-                'ACTIVE GUESS',
+                status == RoomStatus.reveal ? 'ROUND RESULT' : 'ACTIVE GUESS',
                 style: GoogleFonts.cinzel(
                   color: AppTheme.gold,
                   fontSize: isPhone ? 7 : (isMobile ? 8 : 10),
@@ -591,33 +598,43 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                 ),
               ),
               SizedBox(height: isPhone ? 2 : (isMobile ? 4 : 6)),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Expanded(
-                    child: Text(
-                      guesserText,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: isPhone ? 8 : (isMobile ? 10 : 11),
-                        fontWeight: FontWeight.bold,
-                        overflow: TextOverflow.ellipsis,
+              if (status == RoomStatus.reveal)
+                Text(
+                  targetText,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: isPhone ? 8 : (isMobile ? 10 : 11),
+                    fontWeight: FontWeight.bold,
+                  ),
+                )
+              else
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        guesserText,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isPhone ? 8 : (isMobile ? 10 : 11),
+                          fontWeight: FontWeight.bold,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.arrow_forward, size: isPhone ? 8 : 10, color: AppTheme.gold),
-                  const SizedBox(width: 4),
-                  Text(
-                    targetText,
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: isPhone ? 8 : (isMobile ? 10 : 11),
-                      fontWeight: FontWeight.w500,
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_forward, size: isPhone ? 8 : 10, color: AppTheme.gold),
+                    const SizedBox(width: 4),
+                    Text(
+                      targetText,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: isPhone ? 8 : (isMobile ? 10 : 11),
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ],
             if (activeRoles.any((r) => ['Guard', 'Fake Queen', 'Assassin'].contains(r))) ...[
               SizedBox(height: isPhone ? 6 : (isMobile ? 8 : 12)),
