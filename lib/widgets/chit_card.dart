@@ -19,6 +19,11 @@ class ChitCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final info = _getRoleInfo(role);
+    final double width = MediaQuery.of(context).size.width;
+    final bool isPhone = width < 480;
+
+    final cardWidth = isPhone ? 150.0 : 200.0;
+    final cardHeight = isPhone ? 210.0 : 280.0;
 
     return GestureDetector(
       onTap: onTap,
@@ -42,23 +47,23 @@ class ChitCard extends StatelessWidget {
             },
           );
         },
-        child: isRevealed ? _buildFront(info) : _buildBack(),
+        child: isRevealed ? _buildFront(info, isPhone, cardWidth, cardHeight) : _buildBack(isPhone, cardWidth, cardHeight),
       ),
     );
   }
 
-  Widget _buildFront(Map<String, dynamic> info) {
+  Widget _buildFront(Map<String, dynamic> info, bool isPhone, double cardWidth, double cardHeight) {
     return Container(
       key: const ValueKey(true),
-      width: 200,
-      height: 280,
+      width: cardWidth,
+      height: cardHeight,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(isPhone ? 15 : 20),
         boxShadow: [
-          BoxShadow(color: AppTheme.gold.withOpacity(0.5), blurRadius: 20, spreadRadius: 2),
+          BoxShadow(color: AppTheme.gold.withOpacity(0.5), blurRadius: isPhone ? 12 : 20, spreadRadius: isPhone ? 1 : 2),
         ],
-        border: Border.all(color: AppTheme.gold, width: 3),
+        border: Border.all(color: AppTheme.gold, width: isPhone ? 2 : 3),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -66,36 +71,36 @@ class ChitCard extends StatelessWidget {
           Text(
             info['telugu'],
             style: GoogleFonts.hind(
-              fontSize: 28,
+              fontSize: isPhone ? 20 : 28,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
           ),
-          const SizedBox(height: 8),
-          Icon(info['icon'], size: 50, color: AppTheme.gold),
-          const SizedBox(height: 12),
+          SizedBox(height: isPhone ? 4 : 8),
+          Icon(info['icon'], size: isPhone ? 35 : 50, color: AppTheme.gold),
+          SizedBox(height: isPhone ? 8 : 12),
           Text(
             role.toUpperCase(),
             style: GoogleFonts.cinzel(
-              fontSize: 22,
+              fontSize: isPhone ? 16 : 22,
               fontWeight: FontWeight.bold,
               color: Colors.black,
-              letterSpacing: 2,
+              letterSpacing: isPhone ? 1.2 : 2,
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: isPhone ? 12 : 20),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: EdgeInsets.symmetric(horizontal: isPhone ? 10 : 16, vertical: isPhone ? 3 : 4),
             decoration: BoxDecoration(
               color: AppTheme.gold,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(isPhone ? 8 : 12),
             ),
             child: Text(
               '${info['score']} pts',
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.black,
                 fontWeight: FontWeight.bold,
-                fontSize: 16,
+                fontSize: isPhone ? 12 : 16,
               ),
             ),
           ),
@@ -104,33 +109,33 @@ class ChitCard extends StatelessWidget {
     );
   }
 
-  Widget _buildBack() {
+  Widget _buildBack(bool isPhone, double cardWidth, double cardHeight) {
     return Container(
       key: const ValueKey(false),
-      width: 200,
-      height: 280,
+      width: cardWidth,
+      height: cardHeight,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [AppTheme.gold, Color(0xFFB8860B)],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(isPhone ? 15 : 20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 15, offset: const Offset(0, 5)),
+          BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: isPhone ? 10 : 15, offset: Offset(0, isPhone ? 3 : 5)),
         ],
-        border: Border.all(color: Colors.white24, width: 2),
+        border: Border.all(color: Colors.white24, width: isPhone ? 1.5 : 2),
       ),
       child: Center(
         child: Container(
-          width: 160,
-          height: 240,
+          width: isPhone ? 120 : 160,
+          height: isPhone ? 160 : 240,
           decoration: BoxDecoration(
             border: Border.all(color: Colors.white38, width: 1),
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(isPhone ? 10 : 15),
           ),
-          child: const Center(
-            child: Icon(Icons.stars_rounded, color: Colors.white70, size: 60),
+          child: Center(
+            child: Icon(Icons.stars_rounded, color: Colors.white70, size: isPhone ? 40 : 60),
           ),
         ),
       ),

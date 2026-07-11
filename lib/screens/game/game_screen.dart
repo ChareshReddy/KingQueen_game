@@ -22,10 +22,13 @@ class GameScreen extends ConsumerStatefulWidget {
 
 class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObserver {
   String? _selectedPlayerId;
+  bool? _showGuide;
   bool _isMyCardRevealed = false;
   final GlobalKey _myCardKey = GlobalKey();
   final Map<String, GlobalKey> _playerKeys = {};
   String? _lastShownDeceptionTargetId;
+  List<PlayerModel>? _localPlayers;
+  final Set<String> _removingPlayerIds = {};
   
   Offset? _flyStart;
   Offset? _flyEnd;
@@ -226,12 +229,56 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     return box.localToGlobal(Offset.zero) + Offset(box.size.width / 2, box.size.height / 2);
   }
 
+  void _syncLocalPlayers(List<PlayerModel> newPlayers) {
+    if (_localPlayers == null) {
+      _localPlayers = List.from(newPlayers);
+      return;
+    }
+
+    // Identify removed players
+    final newIds = newPlayers.map((p) => p.id).toSet();
+    final List<PlayerModel> toKeep = [];
+    for (var player in _localPlayers!) {
+      if (!newIds.contains(player.id)) {
+        if (!_removingPlayerIds.contains(player.id)) {
+          _removingPlayerIds.add(player.id);
+          Future.delayed(const Duration(milliseconds: 1200), () {
+            if (mounted) {
+              setState(() {
+                _removingPlayerIds.remove(player.id);
+                _localPlayers?.removeWhere((p) => p.id == player.id);
+              });
+            }
+          });
+        }
+        toKeep.add(player); // Keep temporarily during fade out
+      } else {
+        toKeep.add(player);
+      }
+    }
+    _localPlayers = toKeep;
+
+    // Identify added or updated players
+    for (var player in newPlayers) {
+      final index = _localPlayers!.indexWhere((p) => p.id == player.id);
+      if (index == -1) {
+        _localPlayers!.add(player);
+      } else {
+        if (!_removingPlayerIds.contains(player.id)) {
+          _localPlayers![index] = player;
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final gameData = ref.watch(gameProvider);
     final room = gameData.currentRoom;
     final me = gameData.me;
     final players = gameData.players;
+
+    _syncLocalPlayers(players);
 
     final fakeQueenDeceivedGuesserId = room?.fakeQueenDeceivedGuesserId;
     final fakeQueenDeceivedTargetId = room?.fakeQueenDeceivedTargetId;
@@ -377,6 +424,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               _buildLeaveButton(),
               _buildScoreboardButton(players),
               _buildGuideButton(players),
+              _buildGuessingGuide(players),
             ],
           ),
         ),
@@ -414,84 +462,157 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   }
 
   Widget _buildGuessingGuide(List<PlayerModel> players) {
-    final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
     final room = ref.watch(gameProvider).currentRoom;
     final status = room?.status;
 
+    // Hide guide panel cleanly if room is waiting/finished/dealing or null
+    if (status == null ||
+        status == RoomStatus.waiting ||
+        status == RoomStatus.finished ||
+        status == RoomStatus.dealing) {
+      return const SizedBox.shrink();
+    }
+
+    final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
+    final double width = MediaQuery.of(context).size.width;
+    final bool isPhone = width < 480;
+    final bool isMobile = width < 800;
+    final bool show = _showGuide ?? !isPhone;
+
+    if (!show) {
+      // Toggle button positioned out of the way on mobile/phone
+      return Positioned(
+        left: isPhone ? 16 : 10,
+        bottom: isPhone ? 100 : null,
+        top: isPhone ? null : 80,
+        child: GestureDetector(
+          onTap: () => setState(() => _showGuide = true),
+          child: Container(
+            padding: EdgeInsets.all(isPhone ? 6 : 8),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(isPhone ? 0.5 : 0.7),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
+            ),
+            child: Icon(
+              Icons.help_outline_rounded,
+              color: AppTheme.gold,
+              size: isPhone ? 16 : 20,
+            ),
+          ),
+        ),
+      );
+    }
+
     String guesserText = '';
     String targetText = '';
+    
+    // Defensive checks to prevent reading properties of absent/just-removed players
+    final hasKing = players.any((p) => p.currentRole == 'King');
+    final hasQueen = players.any((p) => p.currentRole == 'Queen');
+    final hasMinister = players.any((p) => p.currentRole == 'Minister');
+
     if (status == RoomStatus.playing) {
-      final king = players.firstWhere((p) => p.currentRole == 'King', orElse: () => PlayerModel(id: '', name: 'King', avatarId: ''));
-      guesserText = king.name;
+      if (hasKing) {
+        final king = players.firstWhere((p) => p.currentRole == 'King');
+        guesserText = king.name;
+      } else {
+        guesserText = '...';
+      }
       targetText = 'Queen';
     } else if (status == RoomStatus.guessing_minister) {
-      final queen = players.firstWhere((p) => p.currentRole == 'Queen', orElse: () => PlayerModel(id: '', name: 'Queen', avatarId: ''));
-      guesserText = queen.name;
+      if (hasQueen) {
+        final queen = players.firstWhere((p) => p.currentRole == 'Queen');
+        guesserText = queen.name;
+      } else {
+        guesserText = '...';
+      }
       targetText = 'Minister';
     } else if (status == RoomStatus.guessing_thief) {
-      final minister = players.firstWhere((p) => p.currentRole == 'Minister', orElse: () => PlayerModel(id: '', name: 'Minister', avatarId: ''));
-      guesserText = minister.name;
+      if (hasMinister) {
+        final minister = players.firstWhere((p) => p.currentRole == 'Minister');
+        guesserText = minister.name;
+      } else {
+        guesserText = '...';
+      }
       targetText = 'Thief';
     }
 
     return Positioned(
-      left: 20,
-      top: 100,
+      left: isPhone ? 10 : (isMobile ? 10 : 20),
+      top: isPhone ? 120 : (isMobile ? 80 : 100),
       child: Container(
-        padding: const EdgeInsets.all(15),
+        width: isPhone ? 135 : (isMobile ? 180 : 220),
+        padding: EdgeInsets.all(isPhone ? 6 : (isMobile ? 10 : 15)),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(15),
+          color: Colors.black.withOpacity(isPhone ? 0.45 : 0.75),
+          borderRadius: BorderRadius.circular(isPhone ? 10 : 15),
           border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'GUESSING GUIDE',
-              style: GoogleFonts.cinzel(
-                color: AppTheme.gold,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'GUESSING GUIDE',
+                  style: GoogleFonts.cinzel(
+                    color: AppTheme.gold,
+                    fontSize: isPhone ? 8 : (isMobile ? 10 : 12),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => setState(() => _showGuide = false),
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: Colors.white70,
+                    size: isPhone ? 12 : 16,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded, highlight: status == RoomStatus.playing),
-            _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_minister),
-            _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_thief),
+            SizedBox(height: isPhone ? 4 : (isMobile ? 6 : 10)),
+            _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded, highlight: status == RoomStatus.playing, isPhone: isPhone, isMobile: isMobile),
+            _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_minister, isPhone: isPhone, isMobile: isMobile),
+            _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_thief, isPhone: isPhone, isMobile: isMobile),
             if (guesserText.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(height: 1, width: 120, color: Colors.white10),
-              const SizedBox(height: 8),
+              SizedBox(height: isPhone ? 6 : (isMobile ? 8 : 12)),
+              Container(height: 1, width: double.infinity, color: Colors.white10),
+              SizedBox(height: isPhone ? 4 : (isMobile ? 6 : 8)),
               Text(
                 'ACTIVE GUESS',
                 style: GoogleFonts.cinzel(
                   color: AppTheme.gold,
-                  fontSize: 10,
+                  fontSize: isPhone ? 7 : (isMobile ? 8 : 10),
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: isPhone ? 2 : (isMobile ? 4 : 6)),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    guesserText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Text(
+                      guesserText,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: isPhone ? 8 : (isMobile ? 10 : 11),
+                        fontWeight: FontWeight.bold,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(Icons.arrow_forward, size: 10, color: AppTheme.gold),
+                  Icon(Icons.arrow_forward, size: isPhone ? 8 : 10, color: AppTheme.gold),
                   const SizedBox(width: 4),
                   Text(
                     targetText,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white70,
-                      fontSize: 11,
+                      fontSize: isPhone ? 8 : (isMobile ? 10 : 11),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -499,21 +620,21 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               ),
             ],
             if (activeRoles.any((r) => ['Guard', 'Fake Queen', 'Assassin'].contains(r))) ...[
-              const SizedBox(height: 12),
-              Container(height: 1, width: 120, color: Colors.white10),
-              const SizedBox(height: 8),
+              SizedBox(height: isPhone ? 6 : (isMobile ? 8 : 12)),
+              Container(height: 1, width: double.infinity, color: Colors.white10),
+              SizedBox(height: isPhone ? 4 : (isMobile ? 6 : 8)),
               Text(
                 'SPECIAL ROLES',
                 style: GoogleFonts.cinzel(
                   color: AppTheme.gold.withOpacity(0.8),
-                  fontSize: 10,
+                  fontSize: isPhone ? 7 : (isMobile ? 8 : 10),
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 4),
-              if (activeRoles.contains('Guard')) _specialRoleHint('GUARD', 'Protect 1 player'),
-              if (activeRoles.contains('Fake Queen')) _specialRoleHint('FAKE QUEEN', 'Mislead the King'),
-              if (activeRoles.contains('Assassin')) _specialRoleHint('ASSASSIN', 'Cancel 1 player\'s pts'),
+              SizedBox(height: isPhone ? 2 : (isMobile ? 3 : 4)),
+              if (activeRoles.contains('Guard')) _specialRoleHint('GUARD', 'Protect 1 player', isPhone: isPhone, isMobile: isMobile),
+              if (activeRoles.contains('Fake Queen')) _specialRoleHint('FAKE QUEEN', 'Mislead the King', isPhone: isPhone, isMobile: isMobile),
+              if (activeRoles.contains('Assassin')) _specialRoleHint('ASSASSIN', 'Cancel 1 player\'s pts', isPhone: isPhone, isMobile: isMobile),
             ]
           ],
         ),
@@ -521,31 +642,47 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     ).animate().fadeIn().slideX(begin: -0.2, end: 0);
   }
 
-  Widget _specialRoleHint(String role, String hint) {
+  Widget _specialRoleHint(String role, String hint, {bool isPhone = false, bool isMobile = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      padding: EdgeInsets.symmetric(vertical: isPhone ? 1.0 : 2.0),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            padding: EdgeInsets.symmetric(horizontal: isPhone ? 2 : 4, vertical: 1),
             decoration: BoxDecoration(
               color: AppTheme.gold.withOpacity(0.1),
               borderRadius: BorderRadius.circular(3),
             ),
-            child: Text(role, style: const TextStyle(color: AppTheme.gold, fontSize: 8, fontWeight: FontWeight.bold)),
+            child: Text(
+              role,
+              style: TextStyle(
+                color: AppTheme.gold,
+                fontSize: isPhone ? 6 : (isMobile ? 7 : 8),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
-          const SizedBox(width: 6),
-          Text(hint, style: const TextStyle(color: Colors.white54, fontSize: 8)),
+          SizedBox(width: isPhone ? 4 : 6),
+          Text(
+            hint,
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: isPhone ? 6 : (isMobile ? 7 : 8),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _guideRow(String from, String to, IconData icon, {bool highlight = false}) {
+  Widget _guideRow(String from, String to, IconData icon, {bool highlight = false, bool isPhone = false, bool isMobile = false}) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      margin: EdgeInsets.symmetric(vertical: isPhone ? 1 : 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: isPhone ? 2 : (isMobile ? 4 : 6),
+        vertical: isPhone ? 1 : (isMobile ? 2 : 4),
+      ),
       decoration: BoxDecoration(
         color: highlight ? AppTheme.gold.withOpacity(0.15) : Colors.transparent,
         borderRadius: BorderRadius.circular(6),
@@ -556,42 +693,53 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _roleSmallTag(from),
-          const SizedBox(width: 4),
-          Icon(icon, size: 14, color: highlight ? AppTheme.gold : AppTheme.gold.withOpacity(0.5)),
-          const SizedBox(width: 4),
-          _roleSmallTag(to),
+          _roleSmallTag(from, isPhone: isPhone, isMobile: isMobile),
+          SizedBox(width: isPhone ? 2 : 4),
+          Icon(
+            icon,
+            size: isPhone ? 9 : (isMobile ? 11 : 14),
+            color: highlight ? AppTheme.gold : AppTheme.gold.withOpacity(0.5),
+          ),
+          SizedBox(width: isPhone ? 2 : 4),
+          _roleSmallTag(to, isPhone: isPhone, isMobile: isMobile),
         ],
       ),
     );
   }
 
-  Widget _roleSmallTag(String role) {
+  Widget _roleSmallTag(String role, {bool isPhone = false, bool isMobile = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: EdgeInsets.symmetric(horizontal: isPhone ? 2 : (isMobile ? 4 : 6), vertical: 1),
+      margin: EdgeInsets.symmetric(horizontal: isPhone ? 1 : 2),
       decoration: BoxDecoration(
         color: AppTheme.gold.withOpacity(0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         role,
-        style: const TextStyle(color: AppTheme.gold, fontSize: 9, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          color: AppTheme.gold,
+          fontSize: isPhone ? 7 : (isMobile ? 8 : 9),
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
 
   Widget _buildEmojiSelector() {
     final emojis = ['😂', '❤️', '🔥', '👍', '😮', '👑', '🤡', '💸'];
+    final double width = MediaQuery.of(context).size.width;
+    final bool isPhone = width < 480;
+
     return Positioned(
-      bottom: 100,
+      bottom: isPhone ? 80 : 100,
       right: 20,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (_isEmojiPanelOpen)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: EdgeInsets.symmetric(horizontal: isPhone ? 6 : 8, vertical: 4),
               margin: const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.8),
@@ -606,8 +754,8 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                     setState(() => _isEmojiPanelOpen = false);
                   },
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Text(e, style: const TextStyle(fontSize: 24)),
+                    padding: EdgeInsets.symmetric(horizontal: isPhone ? 4 : 6, vertical: 4),
+                    child: Text(e, style: TextStyle(fontSize: isPhone ? 18 : 24)),
                   ),
                 )).toList(),
               ),
@@ -615,7 +763,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
           GestureDetector(
             onTap: () => setState(() => _isEmojiPanelOpen = !_isEmojiPanelOpen),
             child: Container(
-              padding: const EdgeInsets.all(10),
+              padding: EdgeInsets.all(isPhone ? 8 : 10),
               decoration: BoxDecoration(
                 color: Colors.black.withOpacity(0.6),
                 shape: BoxShape.circle,
@@ -624,7 +772,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               child: Icon(
                 _isEmojiPanelOpen ? Icons.close_rounded : Icons.insert_emoticon_rounded,
                 color: AppTheme.gold,
-                size: 24,
+                size: isPhone ? 20 : 24,
               ),
             ),
           ),
@@ -637,11 +785,13 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     // Only show messages from the last 5 seconds
     final now = DateTime.now();
     final recentMessages = messages.where((m) => now.difference(m.timestamp).inSeconds < 5).toList();
+    final double width = MediaQuery.of(context).size.width;
+    final double maxSpread = (width - 100).clamp(50.0, 300.0);
 
     return Stack(
       children: recentMessages.map((m) {
-        // Use senderId to determine horizontal position
-        final xPos = (m.senderId.hashCode.abs() % 300).toDouble();
+        // Use senderId to determine horizontal position, clamped safely to viewport width
+        final xPos = (m.senderId.hashCode.abs() % maxSpread.toInt()).toDouble();
         return Positioned(
           bottom: 100,
           left: 50 + xPos,
@@ -787,35 +937,37 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     final topScore = players.isEmpty
         ? 0
         : players.map((p) => p.totalScore).reduce((a, b) => a > b ? a : b);
+    final double width = MediaQuery.of(context).size.width;
+    final bool isPhone = width < 480;
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.symmetric(horizontal: isPhone ? 12 : 20, vertical: isPhone ? 8 : 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('YOU', style: TextStyle(fontSize: 10, color: AppTheme.gold)),
-              Text('$myScore', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+              Text('YOU', style: TextStyle(fontSize: isPhone ? 8 : 10, color: AppTheme.gold)),
+              Text('$myScore', style: TextStyle(fontSize: isPhone ? 14 : 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
             ],
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: EdgeInsets.symmetric(horizontal: isPhone ? 10 : 16, vertical: isPhone ? 4 : 8),
             decoration: BoxDecoration(
               border: Border.all(color: AppTheme.gold),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               'ROUND ${room?.currentRound ?? 1}',
-              style: const TextStyle(color: AppTheme.gold, fontWeight: FontWeight.bold),
+              style: TextStyle(color: AppTheme.gold, fontWeight: FontWeight.bold, fontSize: isPhone ? 11 : 14),
             ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text('TOP', style: TextStyle(fontSize: 10, color: AppTheme.gold)),
-              Text('$topScore', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+              Text('TOP', style: TextStyle(fontSize: isPhone ? 8 : 10, color: AppTheme.gold)),
+              Text('$topScore', style: TextStyle(fontSize: isPhone ? 14 : 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
             ],
           ),
         ],
@@ -863,7 +1015,8 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppTheme.gold),
+            style: TextStyle(fontSize: (MediaQuery.of(context).size.width < 480) ? 16 : 24, fontWeight: FontWeight.bold, color: AppTheme.gold),
+            textAlign: TextAlign.center,
           ).animate().fadeIn().scale(),
           const SizedBox(height: 20),
           _buildPlayersGrid(otherPlayers, isMyTurn, room?.kingId, room?.queenId, room?.ministerId, room?.status),
@@ -888,9 +1041,12 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     final me = gameData.me;
     final room = gameData.currentRoom;
 
+    final double width = MediaQuery.of(context).size.width;
+    final bool isPhone = width < 480;
+
     return Wrap(
-      spacing: 15,
-      runSpacing: 15,
+      spacing: isPhone ? 10 : 15,
+      runSpacing: isPhone ? 10 : 15,
       alignment: WrapAlignment.center,
       children: List.generate(players.length, (index) {
         final player = players[index];
@@ -906,120 +1062,130 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
         // Presence check
         bool isOnline = ref.read(gameProvider.notifier).isPlayerOnline(player);
 
+        final isRemoving = _removingPlayerIds.contains(player.id);
+
         _playerKeys.putIfAbsent(player.id, () => GlobalKey());
-        return GestureDetector(
-          onTap: canSelect ? () => setState(() => _selectedPlayerId = player.id) : null,
-          child: Column(
-            children: [
-              Stack(
-                children: [
-                  Container(
-                    key: _playerKeys[player.id],
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: AppTheme.surface,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected ? AppTheme.gold : (showKingBadge || showQueenBadge || showMinisterBadge ? AppTheme.gold : Colors.white10),
-                        width: isSelected || showKingBadge || showQueenBadge || showMinisterBadge ? 3 : 1,
-                      ),
-                      boxShadow: isSelected || showKingBadge || showQueenBadge || showMinisterBadge
-                        ? [BoxShadow(color: AppTheme.gold.withOpacity(0.5), blurRadius: 10)] 
-                        : null,
-                    ),
-                    child: Center(
-                      child: showKingBadge 
-                        ? const Icon(Icons.workspace_premium, color: AppTheme.gold, size: 35)
-                        : (showQueenBadge 
-                            ? const Icon(Icons.diamond, color: AppTheme.gold, size: 35)
-                            : (showMinisterBadge
-                                ? const Icon(Icons.gavel_rounded, color: AppTheme.gold, size: 35)
-                                : const Icon(Icons.person, color: Colors.white30, size: 30))),
-                    ),
-                  ),
-                  if (showKingBadge)
-                    _badgeLabel('K'),
-                  if (showQueenBadge)
-                    _badgeLabel('Q'),
-                  if (showMinisterBadge)
-                    _badgeLabel('M'),
-                  // Presence indicator dot
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    child: Container(
-                      width: 12,
-                      height: 12,
+        return AnimatedOpacity(
+          opacity: isRemoving ? 0.0 : 1.0,
+          duration: const Duration(milliseconds: 1200),
+          curve: Curves.easeInOut,
+          child: GestureDetector(
+            onTap: (canSelect && !isRemoving) ? () => setState(() => _selectedPlayerId = player.id) : null,
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    Container(
+                      key: _playerKeys[player.id],
+                      width: isPhone ? 55 : 70,
+                      height: isPhone ? 55 : 70,
                       decoration: BoxDecoration(
-                        color: isOnline ? Colors.green : Colors.grey,
+                        color: AppTheme.surface,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.black, width: 2),
+                        border: Border.all(
+                          color: isSelected ? AppTheme.gold : (showKingBadge || showQueenBadge || showMinisterBadge ? AppTheme.gold : Colors.white10),
+                          width: isSelected || showKingBadge || showQueenBadge || showMinisterBadge ? (isPhone ? 2 : 3) : 1,
+                        ),
+                        boxShadow: isSelected || showKingBadge || showQueenBadge || showMinisterBadge
+                          ? [BoxShadow(color: AppTheme.gold.withOpacity(0.5), blurRadius: isPhone ? 6 : 10)] 
+                          : null,
+                      ),
+                      child: Center(
+                        child: showKingBadge 
+                          ? Icon(Icons.workspace_premium, color: AppTheme.gold, size: isPhone ? 26 : 35)
+                          : (showQueenBadge 
+                              ? Icon(Icons.diamond, color: AppTheme.gold, size: isPhone ? 26 : 35)
+                              : (showMinisterBadge
+                                  ? Icon(Icons.gavel_rounded, color: AppTheme.gold, size: isPhone ? 26 : 35)
+                                  : Icon(Icons.person, color: Colors.white30, size: isPhone ? 22 : 30))),
                       ),
                     ),
-                  ),
-                  // Guard Protected Shield Icon (shown only to the Guard or during reveal phase)
-                  if (room?.guardProtectedId == player.id && 
-                      (me?.currentRole == 'Guard' || status == RoomStatus.reveal))
+                    if (showKingBadge)
+                      _badgeLabel('K', isPhone),
+                    if (showQueenBadge)
+                      _badgeLabel('Q', isPhone),
+                    if (showMinisterBadge)
+                      _badgeLabel('M', isPhone),
+                    // Presence indicator dot
                     Positioned(
-                      top: 0,
-                      right: 0,
+                      bottom: 0,
+                      left: 0,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-                        child: const Icon(Icons.shield, color: Colors.white, size: 10),
+                        width: isPhone ? 9 : 12,
+                        height: isPhone ? 9 : 12,
+                        decoration: BoxDecoration(
+                          color: isOnline ? Colors.green : Colors.grey,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.black, width: 2),
+                        ),
                       ),
+                    ),
+                    // Guard Protected Shield Icon (shown only to the Guard or during reveal phase)
+                    if (room?.guardProtectedId == player.id && 
+                        (me?.currentRole == 'Guard' || status == RoomStatus.reveal))
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          padding: EdgeInsets.all(isPhone ? 3 : 4),
+                          decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                          child: Icon(Icons.shield, color: Colors.white, size: isPhone ? 8 : 10),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  player.name, 
+                  style: TextStyle(
+                    fontSize: isPhone ? 8 : 10, 
+                    color: (showKingBadge || showQueenBadge || showMinisterBadge) ? AppTheme.gold : Colors.white70,
+                    fontWeight: (showKingBadge || showQueenBadge || showMinisterBadge) ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+                if (showKingBadge)
+                  Text('KING / రాజు', style: TextStyle(fontSize: isPhone ? 7 : 8, color: AppTheme.gold)),
+                if (showQueenBadge)
+                  Text('QUEEN / రాణి', style: TextStyle(fontSize: isPhone ? 7 : 8, color: AppTheme.gold)),
+                if (showMinisterBadge)
+                  Text('MINISTER / మంత్రి', style: TextStyle(fontSize: isPhone ? 7 : 8, color: AppTheme.gold)),
+                
+                // Ability action buttons
+                if (me != null && !isRemoving && (status == RoomStatus.playing || status == RoomStatus.guessing_minister || status == RoomStatus.guessing_thief)) ...[
+                  if (me.currentRole == 'Guard' && !me.guardUsedThisRound)
+                    TextButton.icon(
+                      onPressed: () => _useGuardAbility(context, player),
+                      icon: Icon(Icons.shield, size: isPhone ? 10 : 12, color: Colors.greenAccent),
+                      label: Text('PROTECT', style: TextStyle(fontSize: isPhone ? 7 : 8, color: Colors.greenAccent)),
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                    ),
+                  if (me.currentRole == 'Assassin' && !me.assassinUsedThisRound)
+                    TextButton.icon(
+                      onPressed: () => _useAssassinAbility(context, player),
+                      icon: Icon(Icons.gps_fixed, size: isPhone ? 10 : 12, color: Colors.redAccent),
+                      label: Text('TARGET', style: TextStyle(fontSize: isPhone ? 7 : 8, color: Colors.redAccent)),
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
                     ),
                 ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                player.name, 
-                style: TextStyle(
-                  fontSize: 10, 
-                  color: (showKingBadge || showQueenBadge || showMinisterBadge) ? AppTheme.gold : Colors.white70,
-                  fontWeight: (showKingBadge || showQueenBadge || showMinisterBadge) ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-              if (showKingBadge)
-                const Text('KING / రాజు', style: TextStyle(fontSize: 8, color: AppTheme.gold)),
-              if (showQueenBadge)
-                const Text('QUEEN / రాణి', style: TextStyle(fontSize: 8, color: AppTheme.gold)),
-              if (showMinisterBadge)
-                const Text('MINISTER / మంత్రి', style: TextStyle(fontSize: 8, color: AppTheme.gold)),
-              
-              // Ability action buttons
-              if (me != null && (status == RoomStatus.playing || status == RoomStatus.guessing_minister || status == RoomStatus.guessing_thief)) ...[
-                if (me.currentRole == 'Guard' && !me.guardUsedThisRound)
-                  TextButton.icon(
-                    onPressed: () => _useGuardAbility(context, player),
-                    icon: const Icon(Icons.shield, size: 12, color: Colors.greenAccent),
-                    label: const Text('PROTECT', style: TextStyle(fontSize: 8, color: Colors.greenAccent)),
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                  ),
-                if (me.currentRole == 'Assassin' && !me.assassinUsedThisRound)
-                  TextButton.icon(
-                    onPressed: () => _useAssassinAbility(context, player),
-                    icon: const Icon(Icons.gps_fixed, size: 12, color: Colors.redAccent),
-                    label: const Text('TARGET', style: TextStyle(fontSize: 8, color: Colors.redAccent)),
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                  ),
               ],
-            ],
+            ),
           ),
         );
       }),
     );
   }
 
-  Widget _badgeLabel(String label) {
+  Widget _badgeLabel(String label, bool isPhone) {
     return Positioned(
       bottom: 0,
       right: 0,
       child: Container(
-        padding: const EdgeInsets.all(4),
+        padding: EdgeInsets.all(isPhone ? 3 : 4),
         decoration: const BoxDecoration(color: AppTheme.gold, shape: BoxShape.circle),
-        child: Text(label, style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
+        child: Text(
+          label,
+          style: TextStyle(color: Colors.black, fontSize: isPhone ? 8 : 10, fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }

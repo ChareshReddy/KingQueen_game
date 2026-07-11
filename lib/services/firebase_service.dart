@@ -326,12 +326,13 @@ class FirebaseService {
       final statusStr = roomSnap.get('status') as String;
 
       playerIds.remove(playerId);
+      final Map<String, dynamic> updates = {'playerIds': playerIds};
 
       final status = roomSnap.get('status') as String? ?? 'waiting';
       if (status != 'waiting') {
         if (playerIds.length < 4) {
           // Reset to lobby if too few players remain
-          transaction.update(roomDoc, {
+          updates.addAll({
             'status': 'waiting',
             'kingId': null,
             'queenId': null,
@@ -374,7 +375,7 @@ class FirebaseService {
           }
 
           if (newStatus != status) {
-            transaction.update(roomDoc, {'status': newStatus});
+            updates['status'] = newStatus;
           }
         }
       }

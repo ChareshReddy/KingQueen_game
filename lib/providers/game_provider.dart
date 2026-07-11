@@ -151,7 +151,9 @@ class GameNotifier extends Notifier<GameState> {
       final room = state.currentRoom;
       if (room != null && state.me?.id == room.hostId) {
         for (var player in players) {
-          if (!player.isOnline && player.id != room.hostId) {
+          // Use a longer grace period (45 seconds) for hard removal to prevent
+          // false-positive kicks from temporary app-switching or transient network drops.
+          if (!isPlayerOnline(player, thresholdSeconds: 45) && player.id != room.hostId) {
             _service.leaveRoom(room.id, player.id);
           }
         }
@@ -173,11 +175,13 @@ class GameNotifier extends Notifier<GameState> {
     });
   }
 
-  bool isPlayerOnline(PlayerModel player) {
+  bool isPlayerOnline(PlayerModel player, {int thresholdSeconds = 15}) {
     if (player.id.startsWith('bot_')) return true;
     if (player.lastSeen == null) return player.isOnline;
     final diff = DateTime.now().difference(player.lastSeen!);
-    return player.isOnline && diff.inSeconds < 15;
+    // Auto-guess triggers on a short window (default 15s) for smooth UX,
+    // while removal uses a longer window (e.g. 45s) to allow recovery.
+    return player.isOnline && diff.inSeconds < thresholdSeconds;
   }
 
   void _checkAndTriggerAutoGuess() {

@@ -16,19 +16,21 @@ class GoldButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isEnabled = onPressed != null && !isLoading;
+    final bool isPhone = MediaQuery.of(context).size.width < 480;
+
     return Container(
       width: double.infinity,
-      height: 56,
+      height: isPhone ? 46 : 56,
       decoration: BoxDecoration(
         gradient: isEnabled ? AppTheme.goldGradient : null,
         color: isEnabled ? null : Colors.white10,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(isPhone ? 10 : 15),
         boxShadow: isEnabled
             ? [
                 BoxShadow(
                   color: AppTheme.gold.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  blurRadius: isPhone ? 8 : 12,
+                  offset: Offset(0, isPhone ? 2 : 4),
                 ),
               ]
             : null,
@@ -38,7 +40,7 @@ class GoldButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(isPhone ? 10 : 15)),
         ),
         child: isLoading
             ? const CircularProgressIndicator(color: Colors.black)
@@ -47,7 +49,7 @@ class GoldButton extends StatelessWidget {
                 style: TextStyle(
                   color: isEnabled ? Colors.black : Colors.white24,
                   fontWeight: FontWeight.bold,
-                  fontSize: 18,
+                  fontSize: isPhone ? 14 : 18,
                   letterSpacing: 1.2,
                 ),
               ),
