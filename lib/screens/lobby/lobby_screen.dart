@@ -22,6 +22,9 @@ class LobbyScreen extends ConsumerStatefulWidget {
 
 class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingObserver {
   bool _isLeaving = false;
+  bool _isTogglingReady = false;
+  bool _isStartingGame = false;
+  bool _isAddingBot = false;
 
   Future<void> _leaveLobby(BuildContext context) async {
     if (_isLeaving) return;
@@ -170,7 +173,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
             constraints: const BoxConstraints(maxWidth: 500),
             child: Column(
               children: [
-                _buildInfoBanner(),
+                _buildInfoBanner(players, room),
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.all(20),
@@ -189,19 +192,38 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
     ));
   }
 
-  Widget _buildInfoBanner() {
+  Widget _buildInfoBanner(List<PlayerModel> players, RoomModel? room) {
+    final int count = players.length;
+    String bannerText = 'Waiting for players (Min: 4, Max: 10)';
+    if (count < 4) {
+      bannerText = 'Waiting for players — $count/4 minimum joined';
+    } else {
+      final int readyCount = players.where((p) => p.isReady || p.id == room?.hostId).length;
+      final int totalRequired = players.length;
+      if (readyCount < totalRequired) {
+        bannerText = '$readyCount/$totalRequired players ready — waiting for everyone to hit READY';
+      } else {
+        final bool isHost = room?.hostId == ref.read(gameProvider).me?.id;
+        if (isHost) {
+          bannerText = 'All players ready! Tap START GAME to begin';
+        } else {
+          bannerText = 'All players ready — waiting for host to start';
+        }
+      }
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 12),
       color: AppTheme.gold.withOpacity(0.1),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.info_outline, size: 16, color: AppTheme.gold),
-          SizedBox(width: 8),
+          const Icon(Icons.info_outline, size: 16, color: AppTheme.gold),
+          const SizedBox(width: 8),
           Text(
-            'Waiting for players (Min: 4, Max: 10)',
-            style: TextStyle(color: AppTheme.gold, fontSize: 13),
+            bannerText,
+            style: const TextStyle(color: AppTheme.gold, fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -284,8 +306,24 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                     children: [
                       GoldButton(
                         text: 'START GAME',
-                        onPressed: allReady 
-                          ? () => ref.read(gameProvider.notifier).startGame()
+                        onPressed: (allReady && !_isStartingGame)
+                          ? () async {
+                              setState(() => _isStartingGame = true);
+                              try {
+                                await ref.read(gameProvider.notifier).startGame();
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Could not start game: ${e.toString().replaceFirst("Exception: ", "")}'),
+                                      backgroundColor: Colors.redAccent,
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                if (mounted) setState(() => _isStartingGame = false);
+                              }
+                            }
                           : null,
                       ),
                       const SizedBox(height: 12),
@@ -293,10 +331,25 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                         width: double.infinity,
                         height: 56,
                         child: OutlinedButton.icon(
-                          onPressed: () {
-                            // Logic to add a bot
-                            ref.read(gameProvider.notifier).addBot();
-                          },
+                          onPressed: _isAddingBot
+                              ? null
+                              : () async {
+                                  setState(() => _isAddingBot = true);
+                                  try {
+                                    await ref.read(gameProvider.notifier).addBot();
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Could not add AI player: ${e.toString().replaceFirst("Exception: ", "")}'),
+                                          backgroundColor: Colors.redAccent,
+                                        ),
+                                      );
+                                    }
+                                  } finally {
+                                    if (mounted) setState(() => _isAddingBot = false);
+                                  }
+                                },
                           icon: const Icon(Icons.android, color: AppTheme.gold),
                           label: const Text('ADD AI PLAYER', style: TextStyle(color: AppTheme.gold, fontSize: 18, fontWeight: FontWeight.bold)),
                           style: OutlinedButton.styleFrom(
@@ -310,7 +363,25 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                 else
                   GoldButton(
                     text: me?.isReady == true ? 'UNREADY' : 'READY',
-                    onPressed: () => ref.read(gameProvider.notifier).toggleReady(),
+                    onPressed: _isTogglingReady
+                        ? null
+                        : () async {
+                            setState(() => _isTogglingReady = true);
+                            try {
+                              await ref.read(gameProvider.notifier).toggleReady();
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Could not update ready status: ${e.toString().replaceFirst("Exception: ", "")}'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                              }
+                            } finally {
+                              if (mounted) setState(() => _isTogglingReady = false);
+                            }
+                          },
                   ),
                 const SizedBox(height: 12),
                 TextButton(

@@ -191,43 +191,7 @@ class FirebaseService {
         if (currentRole == 'King') {
           transaction.update(roomRef, {'status': 'guessing_minister'});
         } else if (currentRole == 'Queen') {
-          final playerIds = List<String>.from(roomSnap.get('playerIds') ?? []);
-          if (playerIds.length <= 4) {
-            // In a 4-player game, if King, Queen, and Minister are found,
-            // the remaining player is automatically the Thief. No guessing needed.
-            transaction.update(roomRef, {'status': 'reveal'});
-            
-            final playersSnap = await playersColl.get();
-            final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
-            
-            final Map<String, int> scores = {};
-            int maxScore = -1;
-            for (var player in players) {
-              final String role = player.currentRole ?? '';
-              int roundScore = 0;
-              if (assassinTargetId == player.id) {
-                roundScore = 0;
-              } else {
-                roundScore = GameConstants.roleScores[role] ?? 0;
-              }
-              
-              scores[player.id] = roundScore;
-              if (roundScore > maxScore) {
-                maxScore = roundScore;
-              }
-
-              transaction.update(playersColl.doc(player.id), {
-                'totalScore': FieldValue.increment(roundScore),
-              });
-            }
-            return {
-              'isReveal': true,
-              'scores': scores,
-              'maxScore': maxScore,
-            };
-          } else {
-            transaction.update(roomRef, {'status': 'guessing_thief'});
-          }
+          transaction.update(roomRef, {'status': 'guessing_thief'});
         } else if (currentRole == 'Minister') {
           // Finish round and award points
           transaction.update(roomRef, {'status': 'reveal'});
@@ -368,7 +332,7 @@ class FirebaseService {
       if (status != 'waiting') {
         if (playerIds.length < 4) {
           // Reset to lobby if too few players remain
-          transaction.update(roomDoc, {
+          updates.addAll({
             'status': 'waiting',
             'kingId': null,
             'queenId': null,
@@ -411,7 +375,7 @@ class FirebaseService {
           }
 
           if (newStatus != status) {
-            transaction.update(roomDoc, {'status': newStatus});
+            updates['status'] = newStatus;
           }
         }
       }

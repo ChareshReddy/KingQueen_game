@@ -16,6 +16,7 @@ class GameState {
   final List<MessageModel> messages;
   final PlayerModel? me;
   final bool isLoading;
+  final Set<String> removingPlayerIds;
 
   GameState({
     this.currentRoom,
@@ -23,6 +24,7 @@ class GameState {
     this.messages = const [],
     this.me,
     this.isLoading = false,
+    this.removingPlayerIds = const {},
   });
 
   GameState copyWith({
@@ -31,6 +33,7 @@ class GameState {
     List<MessageModel>? messages,
     PlayerModel? me,
     bool? isLoading,
+    Set<String>? removingPlayerIds,
   }) {
     return GameState(
       currentRoom: currentRoom ?? this.currentRoom,
@@ -38,6 +41,7 @@ class GameState {
       messages: messages ?? this.messages,
       me: me ?? this.me,
       isLoading: isLoading ?? this.isLoading,
+      removingPlayerIds: removingPlayerIds ?? this.removingPlayerIds,
     );
   }
 }
@@ -48,6 +52,7 @@ class GameNotifier extends Notifier<GameState> {
   StreamSubscription<List<PlayerModel>>? _playersSubscription;
   StreamSubscription<List<MessageModel>>? _messagesSubscription;
   Timer? _heartbeatTimer;
+  final Set<String> _removingPlayerIds = {};
 
   @override
   GameState build() {
@@ -151,8 +156,27 @@ class GameNotifier extends Notifier<GameState> {
       final room = state.currentRoom;
       if (room != null && state.me?.id == room.hostId) {
         for (var player in players) {
-          if (!player.isOnline && player.id != room.hostId) {
-            _service.leaveRoom(room.id, player.id);
+          // Guard so a player already in the removal flow doesn't trigger multiple times
+          if (_removingPlayerIds.contains(player.id)) continue;
+
+          // Use a longer grace period (45 seconds) for hard removal to prevent
+          // false-positive kicks from temporary app-switching or transient network drops.
+          if (!isPlayerOnline(player, thresholdSeconds: 45) && player.id != room.hostId) {
+            _removingPlayerIds.add(player.id);
+            state = state.copyWith(removingPlayerIds: Set.from(_removingPlayerIds));
+
+            // Delay removal by 1200ms to let the local and remote grid fade animations run
+            Future.delayed(const Duration(milliseconds: 1200), () {
+              // Ensure they are still offline and still in the room before kicking
+              final currentPlayers = state.players;
+              final stillOffline = currentPlayers.any((p) => p.id == player.id && !isPlayerOnline(p, thresholdSeconds: 45));
+              
+              if (stillOffline) {
+                _service.leaveRoom(room.id, player.id);
+              }
+              _removingPlayerIds.remove(player.id);
+              state = state.copyWith(removingPlayerIds: Set.from(_removingPlayerIds));
+            });
           }
         }
       }
@@ -173,11 +197,13 @@ class GameNotifier extends Notifier<GameState> {
     });
   }
 
-  bool isPlayerOnline(PlayerModel player) {
+  bool isPlayerOnline(PlayerModel player, {int thresholdSeconds = 15}) {
     if (player.id.startsWith('bot_')) return true;
     if (player.lastSeen == null) return player.isOnline;
     final diff = DateTime.now().difference(player.lastSeen!);
-    return player.isOnline && diff.inSeconds < 15;
+    // Auto-guess triggers on a short window (default 15s) for smooth UX,
+    // while removal uses a longer window (e.g. 45s) to allow recovery.
+    return player.isOnline && diff.inSeconds < thresholdSeconds;
   }
 
   void _checkAndTriggerAutoGuess() {
@@ -287,20 +313,25 @@ class GameNotifier extends Notifier<GameState> {
     final players = state.players;
     if (players.length < 4) return;
 
-    final roles = _getRolesForPlayerCount(players.length);
-    roles.shuffle();
-    final Map<String, String> rolesMap = {};
+    try {
+      final roles = _getRolesForPlayerCount(players.length);
+      roles.shuffle();
+      final Map<String, String> rolesMap = {};
 
-    for (int i = 0; i < players.length; i++) {
-      rolesMap[players[i].id] = roles[i];
+      for (int i = 0; i < players.length; i++) {
+        rolesMap[players[i].id] = roles[i];
+      }
+
+      final kingId = players[roles.indexOf('King')].id;
+      final queenId = players[roles.indexOf('Queen')].id;
+      final ministerId = players[roles.indexOf('Minister')].id;
+      final thiefId = players[roles.indexOf('Thief')].id;
+
+      await _service.updateGameRoles(state.currentRoom!.id, rolesMap, kingId, queenId, ministerId, thiefId);
+    } catch (e) {
+      debugPrint('startGame failed: $e');
+      rethrow;
     }
-
-    final kingId = players[roles.indexOf('King')].id;
-    final queenId = players[roles.indexOf('Queen')].id;
-    final ministerId = players[roles.indexOf('Minister')].id;
-    final thiefId = players[roles.indexOf('Thief')].id;
-
-    await _service.updateGameRoles(state.currentRoom!.id, rolesMap, kingId, queenId, ministerId, thiefId);
   }
 
   List<String> _getRolesForPlayerCount(int count) {
@@ -334,7 +365,12 @@ class GameNotifier extends Notifier<GameState> {
 
   Future<void> toggleReady() async {
     if (state.currentRoom == null || state.me == null) return;
-    await _service.updatePlayerReady(state.currentRoom!.id, state.me!.id, !state.me!.isReady);
+    try {
+      await _service.updatePlayerReady(state.currentRoom!.id, state.me!.id, !state.me!.isReady);
+    } catch (e) {
+      debugPrint('toggleReady failed: $e');
+      rethrow;
+    }
   }
 
   Future<void> leaveRoom() async {
@@ -371,7 +407,7 @@ class GameNotifier extends Notifier<GameState> {
     await _service.resetRound(state.currentRoom!.id, state.players.map((p) => p.id).toList());
   }
 
-  void addBot() async {
+  Future<void> addBot() async {
     if (state.currentRoom == null) return;
     if (state.players.length >= 10) return; // Limit room to max 10 players
     final botNames = ['Soldier Bot', 'Police Bot', 'Thief Bot', 'Spy Bot', 'Joker Bot'];
@@ -382,7 +418,12 @@ class GameNotifier extends Notifier<GameState> {
       avatarId: 'bot',
       isReady: true,
     );
-    await _service.joinRoom(state.currentRoom!.id, bot);
+    try {
+      await _service.joinRoom(state.currentRoom!.id, bot);
+    } catch (e) {
+      debugPrint('addBot failed: $e');
+      rethrow;
+    }
   }
 
   Future<void> updateOnlineStatus(bool isOnline) async {
