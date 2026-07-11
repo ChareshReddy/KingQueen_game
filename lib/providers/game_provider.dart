@@ -313,20 +313,25 @@ class GameNotifier extends Notifier<GameState> {
     final players = state.players;
     if (players.length < 4) return;
 
-    final roles = _getRolesForPlayerCount(players.length);
-    roles.shuffle();
-    final Map<String, String> rolesMap = {};
+    try {
+      final roles = _getRolesForPlayerCount(players.length);
+      roles.shuffle();
+      final Map<String, String> rolesMap = {};
 
-    for (int i = 0; i < players.length; i++) {
-      rolesMap[players[i].id] = roles[i];
+      for (int i = 0; i < players.length; i++) {
+        rolesMap[players[i].id] = roles[i];
+      }
+
+      final kingId = players[roles.indexOf('King')].id;
+      final queenId = players[roles.indexOf('Queen')].id;
+      final ministerId = players[roles.indexOf('Minister')].id;
+      final thiefId = players[roles.indexOf('Thief')].id;
+
+      await _service.updateGameRoles(state.currentRoom!.id, rolesMap, kingId, queenId, ministerId, thiefId);
+    } catch (e) {
+      debugPrint('startGame failed: $e');
+      rethrow;
     }
-
-    final kingId = players[roles.indexOf('King')].id;
-    final queenId = players[roles.indexOf('Queen')].id;
-    final ministerId = players[roles.indexOf('Minister')].id;
-    final thiefId = players[roles.indexOf('Thief')].id;
-
-    await _service.updateGameRoles(state.currentRoom!.id, rolesMap, kingId, queenId, ministerId, thiefId);
   }
 
   List<String> _getRolesForPlayerCount(int count) {
@@ -360,7 +365,12 @@ class GameNotifier extends Notifier<GameState> {
 
   Future<void> toggleReady() async {
     if (state.currentRoom == null || state.me == null) return;
-    await _service.updatePlayerReady(state.currentRoom!.id, state.me!.id, !state.me!.isReady);
+    try {
+      await _service.updatePlayerReady(state.currentRoom!.id, state.me!.id, !state.me!.isReady);
+    } catch (e) {
+      debugPrint('toggleReady failed: $e');
+      rethrow;
+    }
   }
 
   Future<void> leaveRoom() async {
@@ -397,7 +407,7 @@ class GameNotifier extends Notifier<GameState> {
     await _service.resetRound(state.currentRoom!.id, state.players.map((p) => p.id).toList());
   }
 
-  void addBot() async {
+  Future<void> addBot() async {
     if (state.currentRoom == null) return;
     if (state.players.length >= 10) return; // Limit room to max 10 players
     final botNames = ['Soldier Bot', 'Police Bot', 'Thief Bot', 'Spy Bot', 'Joker Bot'];
@@ -408,7 +418,12 @@ class GameNotifier extends Notifier<GameState> {
       avatarId: 'bot',
       isReady: true,
     );
-    await _service.joinRoom(state.currentRoom!.id, bot);
+    try {
+      await _service.joinRoom(state.currentRoom!.id, bot);
+    } catch (e) {
+      debugPrint('addBot failed: $e');
+      rethrow;
+    }
   }
 
   Future<void> updateOnlineStatus(bool isOnline) async {
