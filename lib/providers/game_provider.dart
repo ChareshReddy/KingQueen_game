@@ -146,6 +146,16 @@ class GameNotifier extends Notifier<GameState> {
       state = state.copyWith(players: players);
       final updatedMe = players.firstWhere((p) => p.id == state.me?.id, orElse: () => state.me!);
       state = state.copyWith(me: updatedMe);
+
+      // Auto-remove offline players if we are the host
+      final room = state.currentRoom;
+      if (room != null && state.me?.id == room.hostId) {
+        for (var player in players) {
+          if (!player.isOnline && player.id != room.hostId) {
+            _service.leaveRoom(room.id, player.id);
+          }
+        }
+      }
     });
     _messagesSubscription = _service.streamMessages(roomId).listen((messages) {
       state = state.copyWith(messages: messages);
