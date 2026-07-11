@@ -415,15 +415,11 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                         ],
                       ),
                     ),
-                    _buildBottomControls(me, room),
+                    _buildBottomControls(me, room, players),
                   ],
                 ),
               ),
               _buildEmojiSelector(),
-              _buildUserBadge(me),
-              _buildLeaveButton(),
-              _buildScoreboardButton(players),
-              _buildGuideButton(players),
               _buildGuessingGuide(players),
             ],
           ),
@@ -461,6 +457,13 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     );
   }
 
+  List<String> _computeRoleChain(List<PlayerModel> players) {
+    final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
+    final chain = activeRoles.toList()
+      ..sort((a, b) => (GameConstants.roleScores[b] ?? 0).compareTo(GameConstants.roleScores[a] ?? 0));
+    return chain;
+  }
+
   Widget _buildGuessingGuide(List<PlayerModel> players) {
     final room = ref.watch(gameProvider).currentRoom;
     final status = room?.status;
@@ -473,6 +476,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
       return const SizedBox.shrink();
     }
 
+    final chain = _computeRoleChain(players);
     final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
     final double width = MediaQuery.of(context).size.width;
     final bool isPhone = width < 480;
@@ -507,35 +511,12 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     String guesserText = '';
     String targetText = '';
     
-    // Defensive checks to prevent reading properties of absent/just-removed players
-    final hasKing = players.any((p) => p.currentRole == 'King');
-    final hasQueen = players.any((p) => p.currentRole == 'Queen');
-    final hasMinister = players.any((p) => p.currentRole == 'Minister');
-
-    if (status == RoomStatus.playing) {
-      if (hasKing) {
-        final king = players.firstWhere((p) => p.currentRole == 'King');
-        guesserText = king.name;
-      } else {
-        guesserText = '...';
-      }
-      targetText = 'Queen';
-    } else if (status == RoomStatus.guessing_minister) {
-      if (hasQueen) {
-        final queen = players.firstWhere((p) => p.currentRole == 'Queen');
-        guesserText = queen.name;
-      } else {
-        guesserText = '...';
-      }
-      targetText = 'Minister';
-    } else if (status == RoomStatus.guessing_thief) {
-      if (hasMinister) {
-        final minister = players.firstWhere((p) => p.currentRole == 'Minister');
-        guesserText = minister.name;
-      } else {
-        guesserText = '...';
-      }
-      targetText = 'Thief';
+    if (status == RoomStatus.guessing && chain.length > (room?.guessStageIndex ?? 0) + 1) {
+      final guesserRole = chain[room!.guessStageIndex];
+      final targetRole = chain[room.guessStageIndex + 1];
+      final guesser = players.where((p) => p.currentRole == guesserRole).firstOrNull;
+      guesserText = guesser?.name ?? '...';
+      targetText = targetRole;
     } else if (status == RoomStatus.reveal) {
       final thief = players.firstWhere(
         (p) => p.currentRole == 'Thief',
@@ -582,9 +563,23 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               ],
             ),
             SizedBox(height: isPhone ? 4 : (isMobile ? 6 : 10)),
-            _guideRow('KING', 'QUEEN', Icons.arrow_forward_rounded, highlight: status == RoomStatus.playing, isPhone: isPhone, isMobile: isMobile),
-            _guideRow('QUEEN', 'MINISTER', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_minister, isPhone: isPhone, isMobile: isMobile),
-            _guideRow('MINISTER', 'THIEF', Icons.arrow_forward_rounded, highlight: status == RoomStatus.guessing_thief, isPhone: isPhone, isMobile: isMobile),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: isPhone ? 120 : (isMobile ? 200 : 300),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(chain.length - 1, (i) => _guideRow(
+                    chain[i].toUpperCase(), 
+                    chain[i + 1].toUpperCase(), 
+                    Icons.arrow_forward_rounded, 
+                    highlight: status == RoomStatus.guessing && room?.guessStageIndex == i,
+                    isPhone: isPhone, isMobile: isMobile,
+                  )),
+                ),
+              ),
+            ),
             if (guesserText.isNotEmpty) ...[
               SizedBox(height: isPhone ? 6 : (isMobile ? 8 : 12)),
               Container(height: 1, width: double.infinity, color: Colors.white10),
@@ -824,24 +819,17 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _buildScoreboardButton(List<PlayerModel> players) {
-    final double width = MediaQuery.of(context).size.width;
-    final bool isPhone = width < 480;
-
-    return Positioned(
-      top: isPhone ? 40 : 50,
-      left: isPhone ? 16 : 20,
-      child: GestureDetector(
-        onTap: () => _showScoreboard(players),
-        child: Container(
-          padding: EdgeInsets.all(isPhone ? 12 : 8),
-          decoration: BoxDecoration(
-            color: Colors.black45,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
-          ),
-          child: const Icon(Icons.leaderboard_rounded, color: AppTheme.gold, size: 20),
+  Widget _buildScoreboardButtonInline(List<PlayerModel> players, bool isPhone) {
+    return GestureDetector(
+      onTap: () => _showScoreboard(players),
+      child: Container(
+        padding: EdgeInsets.all(isPhone ? 8 : 8),
+        decoration: BoxDecoration(
+          color: Colors.black45,
+          shape: BoxShape.circle,
+          border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
         ),
+        child: Icon(Icons.leaderboard_rounded, color: AppTheme.gold, size: isPhone ? 16 : 20),
       ),
     );
   }
@@ -889,80 +877,59 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _buildUserBadge(PlayerModel? me) {
-    final double width = MediaQuery.of(context).size.width;
-    final bool isPhone = width < 480;
+  Widget _buildUserBadgeInline(PlayerModel? me, bool isPhone) {
+    return Container(
+      constraints: BoxConstraints(maxWidth: isPhone ? 80 : 160),
+      padding: EdgeInsets.symmetric(horizontal: isPhone ? 8 : 12, vertical: isPhone ? 5 : 6),
+      decoration: BoxDecoration(
+        color: Colors.black45,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.person, size: isPhone ? 12 : 14, color: AppTheme.gold),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              me?.name.toUpperCase() ?? '...',
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: TextStyle(fontSize: isPhone ? 8 : 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Positioned(
-      top: isPhone ? 40 : 50,
-      right: isPhone ? 68 : 70,
+  Widget _buildLeaveButtonInline(bool isPhone) {
+    return GestureDetector(
+      onTap: () => _showLeaveConfirmation(),
       child: Container(
-        constraints: BoxConstraints(maxWidth: isPhone ? 100 : 160),
-        padding: EdgeInsets.symmetric(horizontal: isPhone ? 8 : 12, vertical: isPhone ? 5 : 6),
+        padding: EdgeInsets.all(isPhone ? 8 : 8),
+        decoration: BoxDecoration(
+          color: Colors.redAccent.withOpacity(0.2),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
+        ),
+        child: Icon(Icons.exit_to_app_rounded, color: Colors.redAccent, size: isPhone ? 16 : 20),
+      ),
+    );
+  }
+
+  Widget _buildGuideButtonInline(List<PlayerModel> players, bool isPhone) {
+    return GestureDetector(
+      onTap: () => _showGuideDialog(players),
+      child: Container(
+        padding: EdgeInsets.all(isPhone ? 8 : 8),
         decoration: BoxDecoration(
           color: Colors.black45,
-          borderRadius: BorderRadius.circular(20),
+          shape: BoxShape.circle,
           border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.person, size: isPhone ? 12 : 14, color: AppTheme.gold),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                me?.name.toUpperCase() ?? '...',
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-                style: TextStyle(fontSize: isPhone ? 8 : 10, fontWeight: FontWeight.bold, letterSpacing: 1),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLeaveButton() {
-    final double width = MediaQuery.of(context).size.width;
-    final bool isPhone = width < 480;
-
-    return Positioned(
-      top: isPhone ? 40 : 50,
-      right: isPhone ? 16 : 20,
-      child: GestureDetector(
-        onTap: () => _showLeaveConfirmation(),
-        child: Container(
-          padding: EdgeInsets.all(isPhone ? 12 : 8),
-          decoration: BoxDecoration(
-            color: Colors.redAccent.withOpacity(0.2),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
-          ),
-          child: const Icon(Icons.exit_to_app_rounded, color: Colors.redAccent, size: 20),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGuideButton(List<PlayerModel> players) {
-    final double width = MediaQuery.of(context).size.width;
-    final bool isPhone = width < 480;
-
-    return Positioned(
-      top: isPhone ? 40 : 50,
-      left: isPhone ? 68 : 70,
-      child: GestureDetector(
-        onTap: () => _showGuideDialog(players),
-        child: Container(
-          padding: EdgeInsets.all(isPhone ? 12 : 8),
-          decoration: BoxDecoration(
-            color: Colors.black45,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppTheme.gold.withOpacity(0.3)),
-          ),
-          child: const Icon(Icons.menu_book_rounded, color: AppTheme.gold, size: 20),
-        ),
+        child: Icon(Icons.menu_book_rounded, color: AppTheme.gold, size: isPhone ? 16 : 20),
       ),
     );
   }
@@ -976,15 +943,25 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     final bool isPhone = width < 480;
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isPhone ? 12 : 20, vertical: isPhone ? 8 : 20),
+      padding: EdgeInsets.symmetric(horizontal: isPhone ? 12 : 20, vertical: isPhone ? 8 : 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text('YOU', style: TextStyle(fontSize: isPhone ? 8 : 10, color: AppTheme.gold)),
-              Text('$myScore', style: TextStyle(fontSize: isPhone ? 14 : 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+              _buildScoreboardButtonInline(players, isPhone),
+              SizedBox(width: isPhone ? 6 : 10),
+              _buildGuideButtonInline(players, isPhone),
+              SizedBox(width: isPhone ? 8 : 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('YOU', style: TextStyle(fontSize: isPhone ? 8 : 10, color: AppTheme.gold)),
+                  Text('$myScore', style: TextStyle(fontSize: isPhone ? 14 : 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+                ],
+              ),
             ],
           ),
           Container(
@@ -998,11 +975,21 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
               style: TextStyle(color: AppTheme.gold, fontWeight: FontWeight.bold, fontSize: isPhone ? 11 : 14),
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text('TOP', style: TextStyle(fontSize: isPhone ? 8 : 10, color: AppTheme.gold)),
-              Text('$topScore', style: TextStyle(fontSize: isPhone ? 14 : 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('TOP', style: TextStyle(fontSize: isPhone ? 8 : 10, color: AppTheme.gold)),
+                  Text('$topScore', style: TextStyle(fontSize: isPhone ? 14 : 18, fontWeight: FontWeight.bold, color: AppTheme.gold)),
+                ],
+              ),
+              SizedBox(width: isPhone ? 8 : 16),
+              _buildUserBadgeInline(me, isPhone),
+              SizedBox(width: isPhone ? 6 : 10),
+              _buildLeaveButtonInline(isPhone),
             ],
           ),
         ],
@@ -1013,31 +1000,24 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   Widget _buildPlayArea(PlayerModel? me, RoomModel? room, List<PlayerModel> players) {
     final displayPlayers = _localPlayers ?? players;
     final otherPlayers = displayPlayers.where((p) => p.id != me?.id).toList();
-    final isKing = me?.currentRole == 'King';
-    final isQueen = me?.currentRole == 'Queen';
-
-    bool isMyTurn = (room?.status == RoomStatus.playing && isKing) || 
-                   (room?.status == RoomStatus.guessing_minister && isQueen) ||
-                   (room?.status == RoomStatus.guessing_thief && me?.currentRole == 'Minister');
-
-    final isMinister = me?.currentRole == 'Minister';
+    final chain = _computeRoleChain(players);
+    final myStageIndex = chain.indexOf(me?.currentRole ?? '');
     final isReveal = room?.status == RoomStatus.reveal;
-    final showMyCard = _isMyCardRevealed || isKing || 
-                      (isQueen && room?.status == RoomStatus.guessing_minister) ||
-                      (isMinister && room?.status == RoomStatus.guessing_thief) ||
-                      isReveal;
 
-    final king = players.firstWhere((p) => p.id == room?.kingId, orElse: () => PlayerModel(id: '', name: 'KING', avatarId: ''));
-    final queen = players.firstWhere((p) => p.id == room?.queenId, orElse: () => PlayerModel(id: '', name: 'QUEEN', avatarId: ''));
-    final minister = players.firstWhere((p) => p.id == room?.ministerId, orElse: () => PlayerModel(id: '', name: 'MINISTER', avatarId: ''));
+    bool isMyTurn = room?.status == RoomStatus.guessing && myStageIndex == (room?.guessStageIndex ?? -1);
+    final showMyCard = _isMyCardRevealed || 
+                       (room?.status == RoomStatus.guessing && myStageIndex <= room!.guessStageIndex) || 
+                       isReveal;
 
     String title = 'GAME IN PROGRESS';
-    if (room?.status == RoomStatus.playing) {
-      title = isKing ? 'GUESS THE QUEEN!' : '${king.name} IS GUESSING QUEEN';
-    } else if (room?.status == RoomStatus.guessing_minister) {
-      title = isQueen ? 'GUESS THE MINISTER!' : '${queen.name} IS GUESSING MINISTER';
-    } else if (room?.status == RoomStatus.guessing_thief) {
-      title = me?.currentRole == 'Minister' ? 'GUESS THE THIEF!' : '${minister.name} IS GUESSING THIEF';
+    if (room?.status == RoomStatus.guessing) {
+      final guesserRole = (chain.length > room!.guessStageIndex) ? chain[room.guessStageIndex] : null;
+      final targetRole = (chain.length > room.guessStageIndex + 1) ? chain[room.guessStageIndex + 1] : null;
+      final guesserPlayer = players.where((p) => p.currentRole == guesserRole).firstOrNull;
+      
+      title = isMyTurn 
+          ? 'GUESS THE ${targetRole?.toUpperCase()}!' 
+          : '${guesserPlayer?.name ?? "..."} IS GUESSING ${targetRole?.toUpperCase() ?? ""}';
     } else if (isReveal) {
       title = 'ROUND COMPLETE!';
     }
@@ -1080,6 +1060,8 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     final double width = MediaQuery.of(context).size.width;
     final bool isPhone = width < 480;
 
+    final chain = _computeRoleChain(gameData.players);
+
     return Wrap(
       spacing: isPhone ? 10 : 15,
       runSpacing: isPhone ? 10 : 15,
@@ -1087,13 +1069,45 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
       children: List.generate(players.length, (index) {
         final player = players[index];
         bool isSelected = _selectedPlayerId == player.id;
-        bool isKing = player.id == kingId;
-        bool isQueen = player.id == queenId;
-        bool isMinister = player.id == ministerId;
         
-        bool showKingBadge = isKing;
-        bool showQueenBadge = isQueen && (status == RoomStatus.guessing_minister || status == RoomStatus.guessing_thief || status == RoomStatus.reveal);
-        bool showMinisterBadge = isMinister && (status == RoomStatus.guessing_thief || status == RoomStatus.reveal);
+        final pRole = player.currentRole ?? '';
+        final pIndex = chain.indexOf(pRole);
+        final bool showBadge = status == RoomStatus.reveal || 
+            (status == RoomStatus.guessing && pIndex != -1 && pIndex <= (room?.guessStageIndex ?? -1));
+
+        IconData roleIcon(String role) {
+          switch (role) {
+            case 'King': return Icons.workspace_premium;
+            case 'Queen': return Icons.diamond;
+            case 'Minister': return Icons.gavel_rounded;
+            case 'Spy': return Icons.visibility_rounded;
+            case 'Joker': return Icons.face_retouching_natural;
+            case 'Guard': return Icons.shield_outlined;
+            case 'Fake Queen': return Icons.diamond_outlined;
+            case 'Assassin': return Icons.gavel_outlined;
+            case 'Commander': return Icons.military_tech_rounded;
+            case 'Thief': return Icons.person_search_rounded;
+            default: return Icons.person;
+          }
+        }
+        
+        String roleLetter(String role) {
+          if (role == 'Fake Queen') return 'FQ';
+          return role.isNotEmpty ? role[0] : '';
+        }
+
+        String roleLabel(String role) {
+          switch (role) {
+            case 'King': return 'KING / రాజు';
+            case 'Queen': return 'QUEEN / రాణి';
+            case 'Minister': return 'MINISTER / మంత్రి';
+            case 'Thief': return 'THIEF / దొంగ';
+            default: return role.toUpperCase();
+          }
+        }
+
+        final badgeIcon = roleIcon(pRole);
+        final badgeLetter = roleLetter(pRole);
 
         // Presence check
         bool isOnline = ref.read(gameProvider.notifier).isPlayerOnline(player);
@@ -1119,29 +1133,21 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                         color: AppTheme.surface,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: isSelected ? AppTheme.gold : (showKingBadge || showQueenBadge || showMinisterBadge ? AppTheme.gold : Colors.white10),
-                          width: isSelected || showKingBadge || showQueenBadge || showMinisterBadge ? (isPhone ? 2 : 3) : 1,
+                          color: isSelected ? AppTheme.gold : (showBadge ? AppTheme.gold : Colors.white10),
+                          width: isSelected || showBadge ? (isPhone ? 2 : 3) : 1,
                         ),
-                        boxShadow: isSelected || showKingBadge || showQueenBadge || showMinisterBadge
+                        boxShadow: isSelected || showBadge
                           ? [BoxShadow(color: AppTheme.gold.withOpacity(0.5), blurRadius: isPhone ? 6 : 10)] 
                           : null,
                       ),
                       child: Center(
-                        child: showKingBadge 
-                          ? Icon(Icons.workspace_premium, color: AppTheme.gold, size: isPhone ? 26 : 35)
-                          : (showQueenBadge 
-                              ? Icon(Icons.diamond, color: AppTheme.gold, size: isPhone ? 26 : 35)
-                              : (showMinisterBadge
-                                  ? Icon(Icons.gavel_rounded, color: AppTheme.gold, size: isPhone ? 26 : 35)
-                                  : Icon(Icons.person, color: Colors.white30, size: isPhone ? 22 : 30))),
+                        child: showBadge 
+                          ? Icon(badgeIcon, color: AppTheme.gold, size: isPhone ? 26 : 35)
+                          : Icon(Icons.person, color: Colors.white30, size: isPhone ? 22 : 30),
                       ),
                     ),
-                    if (showKingBadge)
-                      _badgeLabel('K', isPhone),
-                    if (showQueenBadge)
-                      _badgeLabel('Q', isPhone),
-                    if (showMinisterBadge)
-                      _badgeLabel('M', isPhone),
+                    if (showBadge)
+                      _badgeLabel(badgeLetter, isPhone),
                     // Presence indicator dot
                     Positioned(
                       bottom: 0,
@@ -1175,34 +1181,12 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                   player.name, 
                   style: TextStyle(
                     fontSize: isPhone ? 8 : 10, 
-                    color: (showKingBadge || showQueenBadge || showMinisterBadge) ? AppTheme.gold : Colors.white70,
-                    fontWeight: (showKingBadge || showQueenBadge || showMinisterBadge) ? FontWeight.bold : FontWeight.normal,
+                    color: showBadge ? AppTheme.gold : Colors.white70,
+                    fontWeight: showBadge ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
-                if (showKingBadge)
-                  Text('KING / రాజు', style: TextStyle(fontSize: isPhone ? 7 : 8, color: AppTheme.gold)),
-                if (showQueenBadge)
-                  Text('QUEEN / రాణి', style: TextStyle(fontSize: isPhone ? 7 : 8, color: AppTheme.gold)),
-                if (showMinisterBadge)
-                  Text('MINISTER / మంత్రి', style: TextStyle(fontSize: isPhone ? 7 : 8, color: AppTheme.gold)),
-                
-                // Ability action buttons
-                if (me != null && !isRemoving && (status == RoomStatus.playing || status == RoomStatus.guessing_minister || status == RoomStatus.guessing_thief)) ...[
-                  if (me.currentRole == 'Guard' && !me.guardUsedThisRound)
-                    TextButton.icon(
-                      onPressed: () => _useGuardAbility(context, player),
-                      icon: Icon(Icons.shield, size: isPhone ? 10 : 12, color: Colors.greenAccent),
-                      label: Text('PROTECT', style: TextStyle(fontSize: isPhone ? 7 : 8, color: Colors.greenAccent)),
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                    ),
-                  if (me.currentRole == 'Assassin' && !me.assassinUsedThisRound)
-                    TextButton.icon(
-                      onPressed: () => _useAssassinAbility(context, player),
-                      icon: Icon(Icons.gps_fixed, size: isPhone ? 10 : 12, color: Colors.redAccent),
-                      label: Text('TARGET', style: TextStyle(fontSize: isPhone ? 7 : 8, color: Colors.redAccent)),
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                    ),
-                ],
+                if (showBadge)
+                  Text(roleLabel(pRole), style: TextStyle(fontSize: isPhone ? 7 : 8, color: AppTheme.gold)),
               ],
             ),
           ),
@@ -1226,7 +1210,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     );
   }
 
-  Widget _buildBottomControls(PlayerModel? me, RoomModel? room) {
+  Widget _buildBottomControls(PlayerModel? me, RoomModel? room, List<PlayerModel> players) {
     bool isReveal = room?.status == RoomStatus.reveal;
     bool isHost = room?.hostId == me?.id;
 
@@ -1245,9 +1229,9 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
       );
     }
 
-    bool canGuess = (room?.status == RoomStatus.playing && me?.currentRole == 'King') ||
-                   (room?.status == RoomStatus.guessing_minister && me?.currentRole == 'Queen') ||
-                   (room?.status == RoomStatus.guessing_thief && me?.currentRole == 'Minister');
+    final chain = _computeRoleChain(players);
+    final myStageIndex = chain.indexOf(me?.currentRole ?? '');
+    bool canGuess = room?.status == RoomStatus.guessing && myStageIndex == (room?.guessStageIndex ?? -1);
     
     if (!canGuess) return const SizedBox(height: 100);
 
@@ -1274,29 +1258,4 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
       ),
     );
   }
-
-  void _useGuardAbility(BuildContext context, PlayerModel target) async {
-    await ref.read(gameProvider.notifier).protectPlayer(target.id);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('You have protected ${target.name} from being guessed!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
-  }
-
-  void _useAssassinAbility(BuildContext context, PlayerModel target) async {
-    await ref.read(gameProvider.notifier).useAssassinAbility(target.id);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('You have targeted ${target.name}! Their score is eliminated for this round.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
-  }
-
 }

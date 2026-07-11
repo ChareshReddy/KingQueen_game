@@ -100,7 +100,8 @@ class FirebaseService {
     final batch = _db.batch();
     
     batch.update(_db.collection('rooms').doc(roomId), {
-      'status': 'playing',
+      'status': 'guessing',
+      'guessStageIndex': 0,
       'kingId': kingId,
       'queenId': queenId,
       'ministerId': ministerId,
@@ -138,12 +139,15 @@ class FirebaseService {
           ? roomSnap.get('assassinTargetId') as String? 
           : null;
 
-      // Verify that room status matches expected guesser turn
-      final expectedStatus = currentRole == 'King' 
-          ? 'playing' 
-          : (currentRole == 'Queen' ? 'guessing_minister' : 'guessing_thief');
-      
-      if (roomStatus != expectedStatus) {
+      final playersSnap = await playersColl.get();
+      final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
+      final chain = _computeRoleChain(players);
+      final guessStageIndex = roomSnap.data()!.containsKey('guessStageIndex')
+          ? roomSnap.get('guessStageIndex') as int
+          : 0;
+
+      // Verify room status and guesser turn
+      if (roomStatus != 'guessing' || currentRole != chain[guessStageIndex]) {
         throw Exception("Stale game state or guess already resolved.");
       }
 
@@ -151,8 +155,6 @@ class FirebaseService {
       if (guardProtectedId == guessedPlayerId) {
         // Intercepted by Guard! Treat as wrong guess.
         // Guesser swaps roles with the Guard player.
-        final playersSnap = await playersColl.get();
-        final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
         final guardPlayer = players.firstWhere(
           (p) => p.currentRole == 'Guard',
           orElse: () => throw Exception("Guard role not found in game"),
@@ -164,48 +166,34 @@ class FirebaseService {
         transaction.update(guesserRef, {'currentRole': 'Guard'});
         transaction.update(guardRef, {'currentRole': currentRole});
 
-        // Update the room's role ID for the guesser to the Guard's ID
-        String? roleField;
-        if (currentRole == 'King') {
-          roleField = 'kingId';
-        } else if (currentRole == 'Queen') {
-          roleField = 'queenId';
-        } else if (currentRole == 'Minister') {
-          roleField = 'ministerId';
+        // Update room role fields
+        void updateRoleFieldIfStandard(String role, String playerId) {
+          if (role == 'King') transaction.update(roomRef, {'kingId': playerId});
+          else if (role == 'Queen') transaction.update(roomRef, {'queenId': playerId});
+          else if (role == 'Minister') transaction.update(roomRef, {'ministerId': playerId});
+          else if (role == 'Thief') transaction.update(roomRef, {'thiefId': playerId});
         }
-
-        if (roleField != null) {
-          transaction.update(roomRef, {roleField: guardPlayer.id});
-        }
-        return null; // Penalty applied, end transaction
+        updateRoleFieldIfStandard(currentRole, guardPlayer.id);
+        updateRoleFieldIfStandard('Guard', guesserId);
+        return null;
       }
 
       // Determine if the guess is correct
-      final isCorrect = currentRole == 'King'
-          ? (guessedPlayerId == roomSnap.get('queenId'))
-          : (currentRole == 'Queen'
-              ? (guessedPlayerId == roomSnap.get('ministerId'))
-              : (guessedPlayerId == roomSnap.get('thiefId')));
+      final targetRole = chain[guessStageIndex + 1];
+      final targetPlayer = players.firstWhere((p) => p.currentRole == targetRole);
+      final isCorrect = guessedPlayerId == targetPlayer.id;
 
       if (isCorrect) {
-        if (currentRole == 'King') {
-          transaction.update(roomRef, {'status': 'guessing_minister'});
-        } else if (currentRole == 'Queen') {
-          transaction.update(roomRef, {'status': 'guessing_thief'});
-        } else if (currentRole == 'Minister') {
+        // Correct guess: is it the last role in the chain (always Thief)?
+        if (guessStageIndex + 1 == chain.length - 1) {
           // Finish round and award points
           transaction.update(roomRef, {'status': 'reveal'});
-          
-          final playersSnap = await playersColl.get();
-          final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
           
           final Map<String, int> scores = {};
           int maxScore = -1;
           for (var player in players) {
             int roundScore = 0;
-            // The guesser (Minister) was successful, so they get their full score.
-            // If they swapped earlier, we use their current role (which is Minister).
-            String role = player.id == guesserId ? 'Minister' : (player.currentRole ?? '');
+            String role = player.id == guesserId ? targetRole : (player.currentRole ?? '');
             
             // Check if player is targeted by the Assassin
             if (assassinTargetId == player.id) {
@@ -228,22 +216,25 @@ class FirebaseService {
             'scores': scores,
             'maxScore': maxScore,
           };
+        } else {
+          // Move to next guess stage
+          transaction.update(roomRef, {'guessStageIndex': guessStageIndex + 1});
         }
       } else {
-        // Incorrect guess: check if King guessed Fake Queen
+        // Incorrect guess: check if wrongly accused is Fake Queen
         final guesserRef = playersColl.doc(guesserId);
         final otherRef = playersColl.doc(guessedPlayerId);
 
         final guesserSnap = await transaction.get(guesserRef);
         final otherSnap = await transaction.get(otherRef);
 
-        final guesserRole = guesserSnap.get('currentRole');
-        final otherRole = otherSnap.get('currentRole');
+        final guesserRole = guesserSnap.get('currentRole') as String;
+        final otherRole = otherSnap.get('currentRole') as String;
 
-        if (otherRole == 'Fake Queen' && guesserRole == 'King') {
-          // DESIGN CHOICE: Fake Queen successfully deceives the King!
-          // Deception bonus: base (400) + 200 bonus = 600 points total.
-          // King remains King and guesses again, no role swap occurs.
+        if (otherRole == 'Fake Queen') {
+          // DESIGN CHOICE (Option A): Fake Queen successfully deceives the guesser!
+          // Deception bonus: 600 points total.
+          // Guesser remains their role and guesses again, no role swap occurs.
           transaction.update(otherRef, {
             'totalScore': FieldValue.increment(600),
           });
@@ -259,25 +250,15 @@ class FirebaseService {
         transaction.update(otherRef, {'currentRole': guesserRole});
 
         // Update room role fields
-        String? roleToField(String role) {
-          switch (role) {
-            case 'King': return 'kingId';
-            case 'Queen': return 'queenId';
-            case 'Minister': return 'ministerId';
-            case 'Thief': return 'thiefId';
-            default: return null;
-          }
+        void updateRoleFieldIfStandard(String role, String playerId) {
+          if (role == 'King') transaction.update(roomRef, {'kingId': playerId});
+          else if (role == 'Queen') transaction.update(roomRef, {'queenId': playerId});
+          else if (role == 'Minister') transaction.update(roomRef, {'ministerId': playerId});
+          else if (role == 'Thief') transaction.update(roomRef, {'thiefId': playerId});
         }
 
-        final guesserField = roleToField(guesserRole);
-        final otherField = roleToField(otherRole);
-
-        if (guesserField != null) {
-          transaction.update(roomRef, {guesserField: guessedPlayerId});
-        }
-        if (otherField != null) {
-          transaction.update(roomRef, {otherField: guesserId});
-        }
+        updateRoleFieldIfStandard(guesserRole, guessedPlayerId);
+        updateRoleFieldIfStandard(otherRole, guesserId);
       }
       return null;
     });
@@ -342,6 +323,7 @@ class FirebaseService {
             'assassinTargetId': null,
             'fakeQueenDeceivedGuesserId': null,
             'fakeQueenDeceivedTargetId': null,
+            'guessStageIndex': 0,
           });
           for (var pId in playerIds) {
             transaction.update(playersColl.doc(pId), {
@@ -352,30 +334,34 @@ class FirebaseService {
             });
           }
         } else if (status != 'reveal' && status != 'finished') {
-          // Dynamically skip guess turns if guessers went offline
-          final kingId = roomSnap.get('kingId') as String?;
-          final queenId = roomSnap.get('queenId') as String?;
-          final ministerId = roomSnap.get('ministerId') as String?;
-          final thiefId = roomSnap.get('thiefId') as String?;
-
-          String newStatus = status;
-
-          if (playerId == kingId) {
-            if (status == 'playing') {
-              newStatus = 'guessing_minister';
-            }
-          } else if (playerId == queenId) {
-            if (status == 'playing' || status == 'guessing_minister') {
-              newStatus = 'guessing_thief';
-            }
-          } else if (playerId == ministerId) {
-            newStatus = 'reveal';
-          } else if (playerId == thiefId) {
-            newStatus = 'reveal';
+          // Dynamically adjust guess index if players leave
+          final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
+          final remainingPlayers = players.where((p) => p.id != playerId).toList();
+          
+          final oldChain = _computeRoleChain(players);
+          final newChain = _computeRoleChain(remainingPlayers);
+          
+          final leavingPlayer = players.firstWhere((p) => p.id == playerId, orElse: () => PlayerModel(id: '', name: '', avatarId: ''));
+          final leavingRole = leavingPlayer.currentRole;
+          final leavingIndex = oldChain.indexOf(leavingRole ?? '');
+          
+          final oldGuessStageIndex = roomSnap.data()!.containsKey('guessStageIndex') 
+              ? roomSnap.get('guessStageIndex') as int 
+              : 0;
+          
+          int newGuessStageIndex = oldGuessStageIndex;
+          
+          if (leavingIndex < oldGuessStageIndex) {
+            // A player before the current guesser left, so shift the index back by 1
+            newGuessStageIndex = max(0, oldGuessStageIndex - 1);
           }
-
-          if (newStatus != status) {
-            updates['status'] = newStatus;
+          
+          if (newGuessStageIndex + 1 >= newChain.length) {
+            updates['status'] = 'reveal';
+          } else {
+            if (newGuessStageIndex != oldGuessStageIndex) {
+              updates['guessStageIndex'] = newGuessStageIndex;
+            }
           }
         }
       }
@@ -414,6 +400,7 @@ class FirebaseService {
           updates['assassinTargetId'] = null;
           updates['fakeQueenDeceivedGuesserId'] = null;
           updates['fakeQueenDeceivedTargetId'] = null;
+          updates['guessStageIndex'] = 0;
 
           // Reset all remaining players' roles and ready status
           for (var doc in playersSnap.docs) {
@@ -473,6 +460,7 @@ class FirebaseService {
       'assassinTargetId': null,
       'fakeQueenDeceivedGuesserId': null,
       'fakeQueenDeceivedTargetId': null,
+      'guessStageIndex': 0,
     });
 
     for (var id in playerIds) {
@@ -514,6 +502,13 @@ class FirebaseService {
         .limit(50)
         .snapshots()
         .map((snap) => snap.docs.map((doc) => MessageModel.fromMap(doc.data())).toList());
+  }
+
+  List<String> _computeRoleChain(List<PlayerModel> players) {
+    final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
+    final chain = activeRoles.toList()
+      ..sort((a, b) => (GameConstants.roleScores[b] ?? 0).compareTo(GameConstants.roleScores[a] ?? 0));
+    return chain;
   }
 
   String _generateRoomId() {

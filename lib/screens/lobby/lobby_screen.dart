@@ -99,7 +99,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
     final players = gameData.players;
     final room = gameData.currentRoom;
 
-    if (room?.status == RoomStatus.playing) {
+    if (room?.status == RoomStatus.guessing) {
       Future.microtask(() {
         if (mounted) {
           Navigator.pushReplacement(

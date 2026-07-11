@@ -7,6 +7,7 @@ import 'package:king_queen/models/player_model.dart';
 import 'package:king_queen/models/room_model.dart';
 import 'package:king_queen/services/firebase_service.dart';
 import 'package:uuid/uuid.dart';
+import 'package:king_queen/core/constants/game_constants.dart';
 import 'package:flutter/foundation.dart';
 
 final firebaseServiceProvider = Provider((ref) => FirebaseService());
@@ -211,9 +212,7 @@ class GameNotifier extends Notifier<GameState> {
     final room = state.currentRoom;
     if (room == null) return;
 
-    if (room.status != RoomStatus.playing &&
-        room.status != RoomStatus.guessing_minister &&
-        room.status != RoomStatus.guessing_thief) {
+    if (room.status != RoomStatus.guessing) {
       return;
     }
 
@@ -224,26 +223,17 @@ class GameNotifier extends Notifier<GameState> {
       return;
     }
 
-    String? activeGuesserId;
-    String? currentRole;
-    if (room.status == RoomStatus.playing) {
-      activeGuesserId = room.kingId;
-      currentRole = 'King';
-    } else if (room.status == RoomStatus.guessing_minister) {
-      activeGuesserId = room.queenId;
-      currentRole = 'Queen';
-    } else if (room.status == RoomStatus.guessing_thief) {
-      activeGuesserId = room.ministerId;
-      currentRole = 'Minister';
-    }
+    final chain = _computeRoleChain(state.players);
+    if (room.guessStageIndex >= chain.length) return;
 
-    if (activeGuesserId == null || currentRole == null) return;
-
+    final currentRole = chain[room.guessStageIndex];
     final activePlayer = state.players.firstWhere(
-      (p) => p.id == activeGuesserId,
+      (p) => p.currentRole == currentRole,
       orElse: () => PlayerModel(id: '', name: '', avatarId: ''),
     );
     if (activePlayer.id.isEmpty) return;
+
+    final activeGuesserId = activePlayer.id;
 
     final isBot = activePlayer.id.startsWith('bot_');
     final isOffline = !isPlayerOnline(activePlayer);
@@ -251,14 +241,16 @@ class GameNotifier extends Notifier<GameState> {
     if (isBot || isOffline) {
       final targetStatus = room.status;
       final targetRound = room.currentRound;
+      final targetStageIndex = room.guessStageIndex;
       Future.delayed(const Duration(seconds: 3), () {
         final currentRoom = state.currentRoom;
         if (currentRoom == null ||
             currentRoom.status != targetStatus ||
-            currentRoom.currentRound != targetRound) {
+            currentRoom.currentRound != targetRound ||
+            currentRoom.guessStageIndex != targetStageIndex) {
           return;
         }
-        _makeAutoGuess(currentRoom, activeGuesserId!, currentRole!);
+        _makeAutoGuess(currentRoom, activeGuesserId, currentRole);
       });
     }
   }
@@ -284,12 +276,21 @@ class GameNotifier extends Notifier<GameState> {
   }
 
   void _makeAutoGuess(RoomModel room, String guesserId, String currentRole) {
-    final List<String> excludedIds = [room.kingId ?? ''];
-    if (currentRole == 'Queen' || currentRole == 'Minister') {
-      excludedIds.add(room.queenId ?? '');
-    }
-    if (currentRole == 'Minister') {
-      excludedIds.add(room.ministerId ?? '');
+    final chain = _computeRoleChain(state.players);
+    final currentStage = room.guessStageIndex;
+    
+    final List<String> excludedIds = [];
+    for (int i = 0; i <= currentStage; i++) {
+      if (i < chain.length) {
+        final role = chain[i];
+        final player = state.players.firstWhere(
+          (p) => p.currentRole == role,
+          orElse: () => PlayerModel(id: '', name: '', avatarId: ''),
+        );
+        if (player.id.isNotEmpty) {
+          excludedIds.add(player.id);
+        }
+      }
     }
 
     final candidates = state.players
@@ -306,6 +307,13 @@ class GameNotifier extends Notifier<GameState> {
       guessedPlayerId: randomCandidate.id,
       currentRole: currentRole,
     );
+  }
+
+  List<String> _computeRoleChain(List<PlayerModel> players) {
+    final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
+    final chain = activeRoles.toList()
+      ..sort((a, b) => (GameConstants.roleScores[b] ?? 0).compareTo(GameConstants.roleScores[a] ?? 0));
+    return chain;
   }
 
   Future<void> startGame() async {
