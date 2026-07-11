@@ -7,6 +7,7 @@ import 'package:king_queen/models/player_model.dart';
 import 'package:king_queen/models/room_model.dart';
 import 'package:king_queen/services/firebase_service.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/foundation.dart';
 
 final firebaseServiceProvider = Provider((ref) => FirebaseService());
 
