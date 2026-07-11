@@ -16,6 +16,7 @@ class GameState {
   final List<MessageModel> messages;
   final PlayerModel? me;
   final bool isLoading;
+  final Set<String> removingPlayerIds;
 
   GameState({
     this.currentRoom,
@@ -23,6 +24,7 @@ class GameState {
     this.messages = const [],
     this.me,
     this.isLoading = false,
+    this.removingPlayerIds = const {},
   });
 
   GameState copyWith({
@@ -31,6 +33,7 @@ class GameState {
     List<MessageModel>? messages,
     PlayerModel? me,
     bool? isLoading,
+    Set<String>? removingPlayerIds,
   }) {
     return GameState(
       currentRoom: currentRoom ?? this.currentRoom,
@@ -38,6 +41,7 @@ class GameState {
       messages: messages ?? this.messages,
       me: me ?? this.me,
       isLoading: isLoading ?? this.isLoading,
+      removingPlayerIds: removingPlayerIds ?? this.removingPlayerIds,
     );
   }
 }
@@ -48,6 +52,7 @@ class GameNotifier extends Notifier<GameState> {
   StreamSubscription<List<PlayerModel>>? _playersSubscription;
   StreamSubscription<List<MessageModel>>? _messagesSubscription;
   Timer? _heartbeatTimer;
+  final Set<String> _removingPlayerIds = {};
 
   @override
   GameState build() {
@@ -151,10 +156,27 @@ class GameNotifier extends Notifier<GameState> {
       final room = state.currentRoom;
       if (room != null && state.me?.id == room.hostId) {
         for (var player in players) {
+          // Guard so a player already in the removal flow doesn't trigger multiple times
+          if (_removingPlayerIds.contains(player.id)) continue;
+
           // Use a longer grace period (45 seconds) for hard removal to prevent
           // false-positive kicks from temporary app-switching or transient network drops.
           if (!isPlayerOnline(player, thresholdSeconds: 45) && player.id != room.hostId) {
-            _service.leaveRoom(room.id, player.id);
+            _removingPlayerIds.add(player.id);
+            state = state.copyWith(removingPlayerIds: Set.from(_removingPlayerIds));
+
+            // Delay removal by 1200ms to let the local and remote grid fade animations run
+            Future.delayed(const Duration(milliseconds: 1200), () {
+              // Ensure they are still offline and still in the room before kicking
+              final currentPlayers = state.players;
+              final stillOffline = currentPlayers.any((p) => p.id == player.id && !isPlayerOnline(p, thresholdSeconds: 45));
+              
+              if (stillOffline) {
+                _service.leaveRoom(room.id, player.id);
+              }
+              _removingPlayerIds.remove(player.id);
+              state = state.copyWith(removingPlayerIds: Set.from(_removingPlayerIds));
+            });
           }
         }
       }

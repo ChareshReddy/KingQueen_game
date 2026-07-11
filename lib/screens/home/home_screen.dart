@@ -221,9 +221,20 @@ class HomeScreen extends ConsumerWidget {
                     }
                 } catch (e) {
                   if (context.mounted) {
+                    final rawMsg = e.toString().replaceFirst('Exception: ', '');
+                    String userFriendlyMsg = 'Failed to join room: $rawMsg';
+                    
+                    if (rawMsg.contains('Game is already in progress in this room')) {
+                      userFriendlyMsg = 'This game has already started. Ask the host for a new room code.';
+                    } else if (rawMsg.contains('Room not found')) {
+                      userFriendlyMsg = "That room code doesn't exist. Double check and try again.";
+                    } else if (rawMsg.contains('Room is full (Max 10 players)')) {
+                      userFriendlyMsg = 'This room is full (10/10 players).';
+                    }
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Failed to join room: ${e.toString().replaceAll("Exception: ", "")}'),
+                        content: Text(userFriendlyMsg),
                         backgroundColor: Colors.redAccent,
                       ),
                     );

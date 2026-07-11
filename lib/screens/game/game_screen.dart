@@ -976,7 +976,8 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   }
 
   Widget _buildPlayArea(PlayerModel? me, RoomModel? room, List<PlayerModel> players) {
-    final otherPlayers = players.where((p) => p.id != me?.id).toList();
+    final displayPlayers = _localPlayers ?? players;
+    final otherPlayers = displayPlayers.where((p) => p.id != me?.id).toList();
     final isKing = me?.currentRole == 'King';
     final isQueen = me?.currentRole == 'Queen';
 
@@ -1062,7 +1063,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
         // Presence check
         bool isOnline = ref.read(gameProvider.notifier).isPlayerOnline(player);
 
-        final isRemoving = _removingPlayerIds.contains(player.id);
+        final isRemoving = _removingPlayerIds.contains(player.id) || gameData.removingPlayerIds.contains(player.id);
 
         _playerKeys.putIfAbsent(player.id, () => GlobalKey());
         return AnimatedOpacity(
