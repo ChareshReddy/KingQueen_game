@@ -97,9 +97,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   }
 
   void _showGuideDialog(List<PlayerModel> players) {
-    final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
-    final sortedActiveRoles = activeRoles.toList()
-      ..sort((a, b) => (GameConstants.roleScores[b] ?? 0).compareTo(GameConstants.roleScores[a] ?? 0));
+    final chain = _computeRoleChain(players);
 
     showDialog(
       context: context,
@@ -110,50 +108,57 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
           textAlign: TextAlign.center,
           style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'GUESSING SEQUENCE',
-                style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              _guideRow('KING / రాజు', 'QUEEN / రాణి', Icons.arrow_forward_rounded),
-              _guideRow('QUEEN / రాణి', 'MINISTER / మంత్రి', Icons.arrow_forward_rounded),
-              _guideRow('MINISTER / మంత్రి', 'THIEF / దొంగ', Icons.arrow_forward_rounded),
-              const SizedBox(height: 16),
-              Text(
-                'ROLE HIERARCHY & SCORES',
-                style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              ...sortedActiveRoles.map((role) {
-                final score = GameConstants.roleScores[role] ?? 0;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(role, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                      Text('$score pts', style: const TextStyle(color: AppTheme.gold, fontWeight: FontWeight.bold, fontSize: 13)),
-                    ],
-                  ),
-                );
-              }).toList(),
-              if (activeRoles.any((r) => ['Guard', 'Fake Queen', 'Assassin'].contains(r))) ...[
-                const SizedBox(height: 16),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  'SPECIAL ROLES',
+                  'GUESSING SEQUENCE',
                   style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                if (activeRoles.contains('Guard')) _specialRoleDescription('GUARD', 'Can protect 1 player per round. If the protected player is guessed, it is counted as a wrong guess and roles are swapped with the Guard.'),
-                if (activeRoles.contains('Fake Queen')) _specialRoleDescription('FAKE QUEEN', 'Misleads the King. If the King guesses the Fake Queen, she gets a +600 points deception bonus and no role swap occurs.'),
-                if (activeRoles.contains('Assassin')) _specialRoleDescription('ASSASSIN', 'Can target 1 player. That player\'s score for the round is eliminated (set to 0).'),
+                ...List.generate(chain.length - 1, (i) => _guideRow(
+                  _roleLabel(chain[i]),
+                  _roleLabel(chain[i + 1]),
+                  Icons.arrow_forward_rounded,
+                )),
+                const SizedBox(height: 16),
+                Text(
+                  'ROLE HIERARCHY & SCORES',
+                  style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                ...chain.map((role) {
+                  final score = GameConstants.roleScores[role] ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(role, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                        Text('$score pts', style: const TextStyle(color: AppTheme.gold, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                if (chain.any((r) => ['Guard', 'Fake Queen', 'Assassin'].contains(r))) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'SPECIAL ROLES',
+                    style: GoogleFonts.cinzel(color: AppTheme.gold, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  if (chain.contains('Guard')) _specialRoleDescription('GUARD', 'Can protect 1 player per round. If the protected player is guessed, it is counted as a wrong guess and roles are swapped with the Guard.'),
+                  if (chain.contains('Fake Queen')) _specialRoleDescription('FAKE QUEEN', 'Misleads the King. If the King guesses the Fake Queen, she gets a +600 points deception bonus and no role swap occurs.'),
+                  if (chain.contains('Assassin')) _specialRoleDescription('ASSASSIN', 'Can target 1 player. That player\'s score for the round is eliminated (set to 0).'),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         actions: [
@@ -462,6 +467,28 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     final chain = activeRoles.toList()
       ..sort((a, b) => (GameConstants.roleScores[b] ?? 0).compareTo(GameConstants.roleScores[a] ?? 0));
     return chain;
+  }
+
+  String _teluguName(String role) {
+    switch (role.toLowerCase()) {
+      case 'king': return 'రాజు';
+      case 'queen': return 'రాణి';
+      case 'minister': return 'మంత్రి';
+      case 'spy': return 'గూఢచారి';
+      case 'joker': return 'జోకర్';
+      case 'guard': return 'రక్షకుడు';
+      case 'fake queen': return 'నకిలీ రాణి';
+      case 'assassin': return 'హంతకుడు';
+      case 'commander': return 'కమాండర్';
+      case 'thief': return 'దొంగ';
+      default: return '';
+    }
+  }
+
+  String _roleLabel(String role) {
+    final telugu = _teluguName(role);
+    if (telugu.isEmpty) return role.toUpperCase();
+    return '${role.toUpperCase()} / $telugu';
   }
 
   Widget _buildGuessingGuide(List<PlayerModel> players) {
@@ -1097,13 +1124,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
         }
 
         String roleLabel(String role) {
-          switch (role) {
-            case 'King': return 'KING / రాజు';
-            case 'Queen': return 'QUEEN / రాణి';
-            case 'Minister': return 'MINISTER / మంత్రి';
-            case 'Thief': return 'THIEF / దొంగ';
-            default: return role.toUpperCase();
-          }
+          return _roleLabel(role);
         }
 
         final badgeIcon = roleIcon(pRole);
