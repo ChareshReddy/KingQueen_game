@@ -30,13 +30,38 @@ class FirebaseService {
   }
 
   Future<PlayerModel> _createOrUpdateUser(String uid, String name) async {
-    final player = PlayerModel(
-      id: uid,
-      name: name,
-      avatarId: (1 + (uid.hashCode % 10)).toString(),
-    );
-    await _db.collection('users').doc(player.id).set(player.toMap());
-    return player;
+    final docRef = _db.collection('users').doc(uid);
+    final docSnap = await docRef.get();
+
+    if (docSnap.exists) {
+      final existingData = docSnap.data()!;
+      final existingPlayer = PlayerModel.fromMap(existingData);
+      
+      final updatedPlayer = existingPlayer.copyWith(
+        name: name,
+        isOnline: true,
+        lastSeen: DateTime.now(),
+      );
+
+      await docRef.update({
+        'name': name,
+        'isOnline': true,
+        'lastSeen': DateTime.now().toIso8601String(),
+      });
+      return updatedPlayer;
+    } else {
+      final player = PlayerModel(
+        id: uid,
+        name: name,
+        avatarId: (1 + (uid.hashCode % 10)).toString(),
+        totalScore: 0,
+        wins: 0,
+        isOnline: true,
+        lastSeen: DateTime.now(),
+      );
+      await docRef.set(player.toMap());
+      return player;
+    }
   }
 
   Future<String> createRoom(PlayerModel host) async {
