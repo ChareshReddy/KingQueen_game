@@ -9,6 +9,7 @@ import 'package:king_queen/services/firebase_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:king_queen/core/constants/game_constants.dart';
 import 'package:flutter/foundation.dart';
+import 'package:king_queen/core/utils/game_utils.dart';
 
 final firebaseServiceProvider = Provider((ref) => FirebaseService());
 
@@ -62,6 +63,7 @@ class GameNotifier extends Notifier<GameState> {
     ref.onDispose(() {
       _cancelSubscriptions();
     });
+    Future.microtask(() => _service.cleanupStaleRooms());
     return GameState();
   }
 
@@ -311,9 +313,17 @@ class GameNotifier extends Notifier<GameState> {
 
   List<String> _computeRoleChain(List<PlayerModel> players) {
     final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
-    final chain = activeRoles.toList()
-      ..sort((a, b) => (GameConstants.roleScores[b] ?? 0).compareTo(GameConstants.roleScores[a] ?? 0));
-    return chain;
+    return GameUtils.computeRoleChain(activeRoles);
+  }
+
+  Future<void> endGame() async {
+    if (state.currentRoom == null) return;
+    try {
+      await _service.endGame(state.currentRoom!.id);
+    } catch (e) {
+      debugPrint('endGame failed: $e');
+      rethrow;
+    }
   }
 
   Future<void> startGame() async {

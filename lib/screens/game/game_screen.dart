@@ -12,6 +12,7 @@ import 'package:king_queen/widgets/gold_button.dart';
 import 'package:king_queen/widgets/animated_raja_rani_background.dart';
 import 'package:king_queen/screens/lobby/lobby_screen.dart';
 import 'package:king_queen/core/constants/game_constants.dart';
+import 'package:king_queen/core/utils/game_utils.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
@@ -464,9 +465,7 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
 
   List<String> _computeRoleChain(List<PlayerModel> players) {
     final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
-    final chain = activeRoles.toList()
-      ..sort((a, b) => (GameConstants.roleScores[b] ?? 0).compareTo(GameConstants.roleScores[a] ?? 0));
-    return chain;
+    return GameUtils.computeRoleChain(activeRoles);
   }
 
   String _teluguName(String role) {
@@ -1024,7 +1023,188 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     );
   }
 
+  Widget _buildGameOverArea(List<PlayerModel> players) {
+    final sortedStandings = List<PlayerModel>.from(players)
+      ..sort((a, b) => b.totalScore.compareTo(a.totalScore));
+    
+    final maxScore = sortedStandings.isNotEmpty ? sortedStandings.first.totalScore : 0;
+    final winners = sortedStandings.where((p) => p.totalScore == maxScore).toList();
+    final winnerNames = winners.map((w) => w.name).join(' & ');
+    final isPhone = MediaQuery.of(context).size.width < 480;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'GAME OVER',
+            style: GoogleFonts.cinzel(
+              color: AppTheme.gold,
+              fontSize: isPhone ? 26 : 32,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+            ),
+          ),
+          Text(
+            'ఆట పూర్తయింది',
+            style: TextStyle(
+              color: AppTheme.gold.withOpacity(0.7),
+              fontSize: isPhone ? 14 : 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Winner Box
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.gold, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.gold.withOpacity(0.15),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                )
+              ],
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.workspace_premium, size: 64, color: AppTheme.gold),
+                const SizedBox(height: 12),
+                Text(
+                  winners.length > 1 ? 'TIE GAME!' : 'CHAMPION!',
+                  style: GoogleFonts.cinzel(
+                    color: AppTheme.gold,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  winnerNames,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$maxScore pts',
+                  style: const TextStyle(
+                    color: AppTheme.gold,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          
+          // Standings Title
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'FINAL STANDINGS',
+              style: GoogleFonts.cinzel(
+                color: AppTheme.gold,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          // Standings List
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: sortedStandings.length,
+            itemBuilder: (context, index) {
+              final player = sortedStandings[index];
+              final isPlayerWinner = player.totalScore == maxScore;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isPlayerWinner ? AppTheme.gold.withOpacity(0.08) : AppTheme.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isPlayerWinner ? AppTheme.gold : Colors.white12,
+                    width: isPlayerWinner ? 1 : 0.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: isPlayerWinner ? AppTheme.gold : Colors.white10,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${index + 1}',
+                          style: TextStyle(
+                            color: isPlayerWinner ? Colors.black : Colors.white70,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        player.name,
+                        style: TextStyle(
+                          color: isPlayerWinner ? Colors.white : Colors.white70,
+                          fontWeight: isPlayerWinner ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${player.totalScore} pts',
+                      style: TextStyle(
+                        color: isPlayerWinner ? AppTheme.gold : Colors.white70,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 32),
+          
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: GoldButton(
+              text: 'RETURN TO HOME',
+              onPressed: _leaveGame,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPlayArea(PlayerModel? me, RoomModel? room, List<PlayerModel> players) {
+    if (room?.status == RoomStatus.finished) {
+      return _buildGameOverArea(players);
+    }
+
     final displayPlayers = _localPlayers ?? players;
     final otherPlayers = displayPlayers.where((p) => p.id != me?.id).toList();
     final chain = _computeRoleChain(players);
@@ -1234,6 +1414,11 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
   Widget _buildBottomControls(PlayerModel? me, RoomModel? room, List<PlayerModel> players) {
     bool isReveal = room?.status == RoomStatus.reveal;
     bool isHost = room?.hostId == me?.id;
+    final bool isPhone = MediaQuery.of(context).size.width < 480;
+
+    if (room?.status == RoomStatus.finished) {
+      return const SizedBox(height: 100);
+    }
 
     if (isReveal && isHost) {
       return Container(
@@ -1241,9 +1426,40 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
-            child: GoldButton(
-              text: 'START NEXT ROUND',
-              onPressed: () => ref.read(gameProvider.notifier).startNextRound(),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GoldButton(
+                    text: 'NEXT ROUND',
+                    onPressed: () => ref.read(gameProvider.notifier).startNextRound(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: isPhone ? 46 : 56,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.redAccent.withOpacity(0.8), width: 2),
+                      borderRadius: BorderRadius.circular(isPhone ? 10 : 15),
+                    ),
+                    child: TextButton(
+                      onPressed: () => ref.read(gameProvider.notifier).endGame(),
+                      style: TextButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(isPhone ? 10 : 15)),
+                      ),
+                      child: Text(
+                        'END GAME',
+                        style: TextStyle(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: isPhone ? 14 : 18,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
