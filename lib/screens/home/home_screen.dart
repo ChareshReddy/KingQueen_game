@@ -10,11 +10,19 @@ import 'package:king_queen/widgets/gold_button.dart';
 import 'package:king_queen/widgets/animated_raja_rani_background.dart';
 
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _isCreatingRoom = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final gameData = ref.watch(gameProvider);
     final me = gameData.me;
     return Scaffold(
@@ -59,15 +67,35 @@ class HomeScreen extends ConsumerWidget {
                     title: 'CREATE ROOM',
                     subtitle: 'Start a new game with friends',
                     icon: Icons.add_box_rounded,
-                    onTap: () async {
-                      final roomId = await ref.read(gameProvider.notifier).createRoom();
-                      if (context.mounted) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => LobbyScreen(roomId: roomId, isHost: true)),
-                        );
-                      }
-                    },
+                    isLoading: _isCreatingRoom,
+                    onTap: _isCreatingRoom
+                        ? null
+                        : () async {
+                            setState(() => _isCreatingRoom = true);
+                            try {
+                              final roomId = await ref.read(gameProvider.notifier).createRoom();
+                              if (context.mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => LobbyScreen(roomId: roomId, isHost: true)),
+                                );
+                              }
+                            } catch (e) {
+                              debugPrint('createRoom failed: $e');
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Could not create room: ${e.toString().replaceFirst('Exception: ', '')}'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                              }
+                            } finally {
+                              if (mounted) {
+                                setState(() => _isCreatingRoom = false);
+                              }
+                            }
+                          },
                   ),
                   const SizedBox(height: 20),
                   _buildActionCard(
@@ -152,7 +180,8 @@ class HomeScreen extends ConsumerWidget {
       {required String title,
       required String subtitle,
       required IconData icon,
-      required VoidCallback onTap}) {
+      required VoidCallback? onTap,
+      bool isLoading = false}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -171,7 +200,16 @@ class HomeScreen extends ConsumerWidget {
                 color: AppTheme.gold.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: AppTheme.gold, size: 32),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(
+                        color: AppTheme.gold,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Icon(icon, color: AppTheme.gold, size: 32),
             ),
             const SizedBox(width: 20),
             Expanded(
@@ -189,7 +227,17 @@ class HomeScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: AppTheme.gold, size: 16),
+            if (isLoading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  color: AppTheme.gold,
+                  strokeWidth: 2,
+                ),
+              )
+            else
+              const Icon(Icons.arrow_forward_ios, color: AppTheme.gold, size: 16),
           ],
         ),
       ),
