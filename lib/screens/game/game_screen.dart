@@ -1484,9 +1484,20 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
                 text: 'SUBMIT GUESS',
                 onPressed: _selectedPlayerId == null 
                   ? null
-                  : () {
-                      ref.read(gameProvider.notifier).makeGuess(_selectedPlayerId!);
-                      setState(() => _selectedPlayerId = null);
+                  : () async {
+                      try {
+                        await ref.read(gameProvider.notifier).makeGuess(_selectedPlayerId!);
+                        setState(() => _selectedPlayerId = null);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Guess failed: ${e.toString().replaceFirst('Exception: ', '')}'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      }
                     },
               ),
             ],
