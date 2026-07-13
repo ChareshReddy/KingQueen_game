@@ -99,7 +99,14 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
     final players = gameData.players;
     final room = gameData.currentRoom;
 
-    if (room?.status == RoomStatus.guessing) {
+    if (room == null) {
+      return const Scaffold(
+        backgroundColor: AppTheme.background,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.gold)),
+      );
+    }
+
+    if (room.status == RoomStatus.guessing) {
       Future.microtask(() {
         if (mounted) {
           Navigator.pushReplacement(

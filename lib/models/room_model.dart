@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 enum RoomStatus { waiting, dealing, guessing, reveal, finished }
 
 class RoomModel {
@@ -16,6 +18,7 @@ class RoomModel {
   final String? fakeQueenDeceivedGuesserId;
   final String? fakeQueenDeceivedTargetId;
   final DateTime createdAt;
+  final DateTime expireAt;
 
   RoomModel({
     required this.id,
@@ -33,7 +36,8 @@ class RoomModel {
     this.fakeQueenDeceivedGuesserId,
     this.fakeQueenDeceivedTargetId,
     required this.createdAt,
-  });
+    DateTime? expireAt,
+  }) : expireAt = expireAt ?? createdAt.add(const Duration(hours: 6));
 
   Map<String, dynamic> toMap() {
     return {
@@ -52,10 +56,25 @@ class RoomModel {
       'fakeQueenDeceivedGuesserId': fakeQueenDeceivedGuesserId,
       'fakeQueenDeceivedTargetId': fakeQueenDeceivedTargetId,
       'createdAt': createdAt.toIso8601String(),
+      'expireAt': expireAt, // Firestore SDK saves DateTime directly as a Timestamp!
     };
   }
 
   factory RoomModel.fromMap(Map<String, dynamic> map) {
+    DateTime parsedCreatedAt = DateTime.now();
+    if (map['createdAt'] != null) {
+      parsedCreatedAt = DateTime.parse(map['createdAt']);
+    }
+    
+    DateTime parsedExpireAt = parsedCreatedAt.add(const Duration(hours: 6));
+    if (map['expireAt'] != null) {
+      if (map['expireAt'] is Timestamp) {
+        parsedExpireAt = (map['expireAt'] as Timestamp).toDate();
+      } else {
+        parsedExpireAt = DateTime.parse(map['expireAt']);
+      }
+    }
+
     return RoomModel(
       id: map['id'] ?? '',
       hostId: map['hostId'] ?? '',
@@ -74,9 +93,8 @@ class RoomModel {
       assassinTargetId: map['assassinTargetId'],
       fakeQueenDeceivedGuesserId: map['fakeQueenDeceivedGuesserId'],
       fakeQueenDeceivedTargetId: map['fakeQueenDeceivedTargetId'],
-      createdAt: map['createdAt'] != null 
-          ? DateTime.parse(map['createdAt']) 
-          : DateTime.now(),
+      createdAt: parsedCreatedAt,
+      expireAt: parsedExpireAt,
     );
   }
 
@@ -96,6 +114,7 @@ class RoomModel {
     String? fakeQueenDeceivedGuesserId,
     String? fakeQueenDeceivedTargetId,
     DateTime? createdAt,
+    DateTime? expireAt,
   }) {
     return RoomModel(
       id: id ?? this.id,
@@ -113,6 +132,7 @@ class RoomModel {
       fakeQueenDeceivedGuesserId: fakeQueenDeceivedGuesserId ?? this.fakeQueenDeceivedGuesserId,
       fakeQueenDeceivedTargetId: fakeQueenDeceivedTargetId ?? this.fakeQueenDeceivedTargetId,
       createdAt: createdAt ?? this.createdAt,
+      expireAt: expireAt ?? this.expireAt,
     );
   }
 }

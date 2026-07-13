@@ -28,8 +28,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && request.auth.uid == userId &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalScore', 'wins']);
+      allow update: if isAuthenticated() && (
+        (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalScore', 'wins'])) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalScore', 'wins'])
+      );
     }
 
     // Rooms rules

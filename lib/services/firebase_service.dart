@@ -29,7 +29,28 @@ class FirebaseService {
     return PlayerModel.fromMap(doc.data()!);
   }
 
+  User? get currentUser => _auth.currentUser;
+
+  Future<void> signOut() async {
+    await _auth.signOut();
+  }
+
   Future<PlayerModel> _createOrUpdateUser(String uid, String name) async {
+    final isAnon = _auth.currentUser?.isAnonymous ?? true;
+
+    if (isAnon) {
+      return PlayerModel(
+        id: uid,
+        name: name,
+        avatarId: (1 + (uid.hashCode % 10)).toString(),
+        totalScore: 0,
+        wins: 0,
+        isOnline: true,
+        lastSeen: DateTime.now(),
+        isAnonymous: true,
+      );
+    }
+
     final docRef = _db.collection('users').doc(uid);
     final docSnap = await docRef.get();
 
@@ -58,6 +79,7 @@ class FirebaseService {
         wins: 0,
         isOnline: true,
         lastSeen: DateTime.now(),
+        isAnonymous: false,
       );
       await docRef.set(player.toMap());
       return player;
@@ -266,10 +288,12 @@ class FirebaseService {
               'totalScore': FieldValue.increment(roundScore),
             });
           }
+          final isAnonymousMap = { for (var p in players) p.id : p.isAnonymous };
           return {
             'isReveal': true,
             'scores': scores,
             'maxScore': maxScore,
+            'isAnonymousMap': isAnonymousMap,
           };
         } else {
           // Move to next guess stage
@@ -320,10 +344,12 @@ class FirebaseService {
 
     if (result != null && result['isReveal'] == true) {
       final scores = Map<String, int>.from(result['scores'] as Map);
+      final isAnonymousMap = Map<String, bool>.from(result['isAnonymousMap'] as Map);
 
       final batch = _db.batch();
       scores.forEach((playerId, roundScore) {
-        if (!playerId.startsWith('bot_')) {
+        final isAnon = isAnonymousMap[playerId] ?? false;
+        if (!isAnon && !playerId.startsWith('bot_')) {
           final userRef = _db.collection('users').doc(playerId);
           batch.update(userRef, {
             'totalScore': FieldValue.increment(roundScore),
@@ -357,6 +383,25 @@ class FirebaseService {
 
       playerIds.remove(playerId);
       final Map<String, dynamic> updates = {'playerIds': playerIds};
+
+      if (roomSnap.data()!.containsKey('kingId') && roomSnap.get('kingId') == playerId) {
+        updates['kingId'] = null;
+      }
+      if (roomSnap.data()!.containsKey('queenId') && roomSnap.get('queenId') == playerId) {
+        updates['queenId'] = null;
+      }
+      if (roomSnap.data()!.containsKey('ministerId') && roomSnap.get('ministerId') == playerId) {
+        updates['ministerId'] = null;
+      }
+      if (roomSnap.data()!.containsKey('thiefId') && roomSnap.get('thiefId') == playerId) {
+        updates['thiefId'] = null;
+      }
+      if (roomSnap.data()!.containsKey('guardProtectedId') && roomSnap.get('guardProtectedId') == playerId) {
+        updates['guardProtectedId'] = null;
+      }
+      if (roomSnap.data()!.containsKey('assassinTargetId') && roomSnap.get('assassinTargetId') == playerId) {
+        updates['assassinTargetId'] = null;
+      }
 
       final status = roomSnap.get('status') as String? ?? 'waiting';
       if (status != 'waiting') {
@@ -587,7 +632,7 @@ class FirebaseService {
       
       // Update lifetime wins for overall human winners
       for (var p in players) {
-        if (!p.id.startsWith('bot_') && p.totalScore == maxScore && maxScore >= 0) {
+        if (!p.isAnonymous && !p.id.startsWith('bot_') && p.totalScore == maxScore && maxScore >= 0) {
           final userRef = _db.collection('users').doc(p.id);
           transaction.update(userRef, {
             'wins': FieldValue.increment(1),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -284,6 +285,13 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     final me = gameData.me;
     final players = gameData.players;
 
+    if (room == null || me == null) {
+      return const Scaffold(
+        backgroundColor: AppTheme.background,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.gold)),
+      );
+    }
+
     _syncLocalPlayers(players);
 
     final fakeQueenDeceivedGuesserId = room?.fakeQueenDeceivedGuesserId;
@@ -340,6 +348,18 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
     }
 
     ref.listen<GameState>(gameProvider, (previous, next) {
+      if (next.currentRoom?.status == RoomStatus.guessing && next.me != null) {
+        final prevChain = _computeRoleChain(previous?.players ?? []);
+        final nextChain = _computeRoleChain(next.players);
+        final prevMyStageIndex = prevChain.indexOf(previous?.me?.currentRole ?? '');
+        final nextMyStageIndex = nextChain.indexOf(next.me!.currentRole ?? '');
+        final wasMyTurn = previous?.currentRoom?.status == RoomStatus.guessing && prevMyStageIndex == (previous?.currentRoom?.guessStageIndex ?? -1);
+        final isNowMyTurn = next.currentRoom?.status == RoomStatus.guessing && nextMyStageIndex == next.currentRoom!.guessStageIndex;
+        if (!wasMyTurn && isNowMyTurn) {
+          HapticFeedback.vibrate();
+        }
+      }
+
       if (previous?.currentRoom != null && next.currentRoom == null) {
         if (mounted) {
           Navigator.of(context).popUntil((route) => route.isFirst);
@@ -1244,15 +1264,59 @@ class _GameScreenState extends ConsumerState<GameScreen> with WidgetsBindingObse
           const SizedBox(height: 20),
           _buildPlayersGrid(otherPlayers, isMyTurn, room?.kingId, room?.queenId, room?.ministerId, room?.status),
           const SizedBox(height: 30),
+          if (isMyTurn) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.greenAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.greenAccent, width: 1.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.star_rounded, color: Colors.greenAccent, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'YOUR TURN!',
+                    style: GoogleFonts.cinzel(
+                      color: Colors.greenAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ],
+              ),
+            ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+             .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 600.ms)
+             .then()
+             .shimmer(duration: 1200.ms),
+            const SizedBox(height: 20),
+          ],
           Center(
-            child: ChitCard(
-              key: _myCardKey,
-              role: me?.currentRole ?? "...",
-              isRevealed: showMyCard,
-              onTap: () {
-                setState(() => _isMyCardRevealed = !_isMyCardRevealed);
-              },
-            ),
+            child: isMyTurn
+              ? ChitCard(
+                  key: _myCardKey,
+                  role: me?.currentRole ?? "...",
+                  isRevealed: showMyCard,
+                  onTap: () {
+                    setState(() => _isMyCardRevealed = !_isMyCardRevealed);
+                  },
+                ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+                 .boxShadow(
+                   begin: BoxShadow(color: Colors.greenAccent.withOpacity(0.2), blurRadius: 10, spreadRadius: 1),
+                   end: BoxShadow(color: Colors.greenAccent.withOpacity(0.8), blurRadius: 20, spreadRadius: 4),
+                   duration: 800.ms,
+                 )
+              : ChitCard(
+                  key: _myCardKey,
+                  role: me?.currentRole ?? "...",
+                  isRevealed: showMyCard,
+                  onTap: () {
+                    setState(() => _isMyCardRevealed = !_isMyCardRevealed);
+                  },
+                ),
           ),
         ],
       ),
