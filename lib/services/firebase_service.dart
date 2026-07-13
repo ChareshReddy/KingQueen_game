@@ -5,6 +5,7 @@ import 'package:king_queen/models/message_model.dart';
 import 'package:king_queen/models/player_model.dart';
 import 'package:king_queen/models/room_model.dart';
 import 'package:king_queen/core/constants/game_constants.dart';
+import 'package:king_queen/core/utils/game_utils.dart';
 
 class FirebaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -38,7 +39,28 @@ class FirebaseService {
   }
 
   Future<String> createRoom(PlayerModel host) async {
-    final roomId = _generateRoomId();
+    String roomId = '';
+    bool isUnique = false;
+    int attempts = 0;
+
+    while (!isUnique && attempts < 5) {
+      roomId = _generateRoomId();
+      attempts++;
+      final roomSnap = await _db.collection('rooms').doc(roomId).get();
+      if (!roomSnap.exists) {
+        isUnique = true;
+      } else {
+        final status = roomSnap.get('status') as String? ?? 'waiting';
+        if (status == 'finished') {
+          isUnique = true;
+        }
+      }
+    }
+
+    if (!isUnique) {
+      throw Exception("Could not generate a unique room code, please try again");
+    }
+
     final room = RoomModel(
       id: roomId,
       hostId: host.id,
@@ -265,19 +287,13 @@ class FirebaseService {
 
     if (result != null && result['isReveal'] == true) {
       final scores = Map<String, int>.from(result['scores'] as Map);
-      final maxScore = result['maxScore'] as int;
 
       final batch = _db.batch();
       scores.forEach((playerId, roundScore) {
-        // Exclude bots and only update if player scored points
-        // DESIGN CHOICE: A player is considered a winner of the round if they score the highest points.
-        // In this case, we increment their lifetime wins in the users collection.
         if (!playerId.startsWith('bot_')) {
           final userRef = _db.collection('users').doc(playerId);
-          final isWinner = roundScore == maxScore;
           batch.update(userRef, {
             'totalScore': FieldValue.increment(roundScore),
-            if (isWinner) 'wins': FieldValue.increment(1),
           });
         }
       });
@@ -506,13 +522,86 @@ class FirebaseService {
 
   List<String> _computeRoleChain(List<PlayerModel> players) {
     final activeRoles = players.map((p) => p.currentRole).whereType<String>().toSet();
-    final chain = activeRoles.toList()
-      ..sort((a, b) => (GameConstants.roleScores[b] ?? 0).compareTo(GameConstants.roleScores[a] ?? 0));
-    return chain;
+    return GameUtils.computeRoleChain(activeRoles);
   }
 
   String _generateRoomId() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    return List.generate(6, (index) => chars[Random().nextInt(chars.length)]).join();
+    return GameUtils.generateRoomId();
+  }
+
+  Future<void> endGame(String roomId) async {
+    final roomRef = _db.collection('rooms').doc(roomId);
+    
+    await _db.runTransaction((transaction) async {
+      final roomSnap = await transaction.get(roomRef);
+      if (!roomSnap.exists) throw Exception("Room does not exist");
+      
+      final playersSnap = await roomRef.collection('players').get();
+      final players = playersSnap.docs.map((d) => PlayerModel.fromMap(d.data())).toList();
+      
+      if (players.isEmpty) return;
+      
+      // Determine overall winner(s)
+      int maxScore = -1;
+      for (var p in players) {
+        if (p.totalScore > maxScore) {
+          maxScore = p.totalScore;
+        }
+      }
+      
+      // Set status to finished
+      transaction.update(roomRef, {'status': 'finished'});
+      
+      // Update lifetime wins for overall human winners
+      for (var p in players) {
+        if (!p.id.startsWith('bot_') && p.totalScore == maxScore && maxScore >= 0) {
+          final userRef = _db.collection('users').doc(p.id);
+          transaction.update(userRef, {
+            'wins': FieldValue.increment(1),
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> cleanupStaleRooms() async {
+    try {
+      final now = DateTime.now();
+      final oneDayAgo = now.subtract(const Duration(hours: 24));
+      final sevenDaysAgo = now.subtract(const Duration(days: 7));
+
+      // Query rooms with status != 'finished' older than 24 hours
+      final staleActiveSnap = await _db.collection('rooms')
+          .where('createdAt', isLessThan: oneDayAgo.toIso8601String())
+          .limit(10)
+          .get();
+
+      // Query rooms with status == 'finished' older than 7 days
+      final staleFinishedSnap = await _db.collection('rooms')
+          .where('status', isEqualTo: 'finished')
+          .where('createdAt', isLessThan: sevenDaysAgo.toIso8601String())
+          .limit(10)
+          .get();
+
+      final allDocs = [...staleActiveSnap.docs, ...staleFinishedSnap.docs];
+      if (allDocs.isEmpty) return;
+
+      for (var doc in allDocs) {
+        final players = await doc.reference.collection('players').get();
+        final messages = await doc.reference.collection('messages').get();
+
+        final batch = _db.batch();
+        for (var p in players.docs) {
+          batch.delete(p.reference);
+        }
+        for (var m in messages.docs) {
+          batch.delete(m.reference);
+        }
+        batch.delete(doc.reference);
+        await batch.commit();
+      }
+    } catch (e) {
+      // Opportunistic cleanup is silent on failures
+    }
   }
 }

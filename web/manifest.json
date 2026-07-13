@@ -3,9 +3,9 @@
     "short_name": "KING QUEEN",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0D0D0D",
+    "theme_color": "#D4AF37",
+    "description": "A real-time multiplayer King Queen Minister Thief party game — gather your friends and find the Thief!",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

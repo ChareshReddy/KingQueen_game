@@ -18,7 +18,9 @@ service cloud.firestore {
     // Users rules
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write, update: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalScore', 'wins']);
     }
 
     // Rooms rules
@@ -55,6 +57,10 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated() && (
+          request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds
+        );
+        allow delete: if isAuthenticated() && (
+          request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId ||
           request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds
         );
       }

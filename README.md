@@ -1,22 +1,27 @@
-# 👑 King Queen 👑
+# 👑 KING QUEEN 👑
 
-A premium real-time multiplayer board game built using **Flutter** and **Firebase Firestore**, featuring state management powered by **Riverpod** and sleek, modern dark-themed aesthetics.
+A premium real-time multiplayer party game built using **Flutter Web** and **Firebase Firestore**, featuring state management powered by **Riverpod** and sleek, modern dark-themed aesthetics.
 
-Inspired by the classic Indian party game *"Raja Rani Chor Mantri"* (King Queen Minister Thief), modernized with interactive gameplay mechanics, active abilities, global leaderboards, and lifetime statistics.
+Inspired by the classic Indian party game *"Raja Rani Chor Mantri"* (King Queen Minister Thief), modernized with a dynamic scale-to-play guessing sequence, deception mechanics, global leaderboards, and a complete match-end scoreboard.
 
 ---
 
 ## 🎨 Features & Highlights
 
-*   📡 **Real-Time Multiplayer:** Full live synchronization of game lobbies, player readiness, and game states powered by Firebase Firestore.
-*   🎮 **Active Roles & Strategic Gameplay:**
-    *   **King (Raja) & Queen (Rani):** Dealt into the game with high point values.
-    *   **Guard (Minister/Mantri):** Tasked with identifying the Thief or Assassin to score points.
-    *   **Thief (Chor):** Sneaks into the lobby trying to remain undetected by the Guard.
-    *   **Assassin (Special Active Role):** Equipped with a deadly active ability to secretly guess another player's role once per round to steal their points.
-    *   **Passive Scored Roles:** Spy, Joker, and Commander roles dealt dynamically to keep opponents guessing.
-*   ✨ **Vibrant Aesthetics:** Sleek dark-mode interface featuring glassmorphic grids, custom animations (jumping/flying cards), emoji reactions, and premium gold accents.
-*   📈 **Global Leaderboard & Lifetime Stats:** Track your wins, total rounds played, high scores, and view the global ranking of all players.
+*   📡 **Real-Time Multiplayer:** Full live synchronization of lobbies, player readiness, and game states powered by Firebase Firestore transactions.
+*   🎮 **Dynamic Guessing Chain:** 
+    *   Lobby roles automatically scale according to the player count.
+    *   Active roles are ranked by points (descending): **King (1000) ➔ Queen (900) ➔ Minister (800) ➔ Spy (700) ➔ Joker (600) ➔ Guard (500) ➔ Fake Queen (400) ➔ Assassin (300) ➔ Commander (200) ➔ Thief (0)**.
+    *   Play proceeds down this chain, with each role holder tasked with guessing the identity of the player holding the next role down the list.
+    *   If a guess is incorrect, roles are swapped with the wrongly accused player and the new role-holder retries.
+    *   The Thief is always the final target at the end of the chain, who never gets a turn to guess.
+*   🎭 **Special Role Mechanics:**
+    *   **Fake Queen:** If guessed incorrectly, she successfully misleads the guesser, scoring a **+600 points** deception bonus, and no role swap occurs.
+*   🏆 **Match End & Game Over:**
+    *   The host can conclude the match at any point on the round-reveal screen.
+    *   A full Game Over scoreboard displays the final standings of all players sorted by their match points, crowning the overall champion.
+    *   Lifetime wins and total scores are securely synchronized to user profiles.
+*   ✨ **Vibrant Aesthetics:** Sleek dark-mode interface featuring glassmorphic grids, custom animations (flying cards), emoji reactions, and premium gold accents.
 
 ---
 
@@ -34,7 +39,8 @@ Inspired by the classic Indian party game *"Raja Rani Chor Mantri"* (King Queen 
 ### Prerequisites
 
 *   Flutter SDK (stable channel)
-*   Firebase project configured for Flutter web/mobile
+*   Firebase CLI installed and logged in
+*   Firebase project configured for web
 
 ### Setup Instructions
 
@@ -44,17 +50,14 @@ Inspired by the classic Indian party game *"Raja Rani Chor Mantri"* (King Queen 
     cd KingQueen_game
     ```
 
-2.  **Configure Firebase:**
-    Ensure you have setup Firebase using the FlutterFire CLI or placed your configurations in `lib/firebase_options.dart`.
-
-3.  **Fetch dependencies:**
+2.  **Fetch dependencies:**
     ```bash
     flutter pub get
     ```
 
-4.  **Run locally (Web):**
+3.  **Run locally:**
     ```bash
-    flutter run -d chrome --web-port 8080
+    flutter run -d chrome
     ```
 
 ---
@@ -63,23 +66,10 @@ Inspired by the classic Indian party game *"Raja Rani Chor Mantri"* (King Queen 
 
 This application is fully optimized for **Render's Free Static Site hosting**:
 
-1.  **Build the release package locally:**
-    ```bash
-    flutter build web --release
-    ```
-2.  **Commit the build output:**
-    ```bash
-    git add .gitignore lib/
-    git add -f build/web/
-    git commit -m "Prepare production web release"
-    git push origin Cherry
-    ```
-3.  **Deploy on Render:**
-    *   Create a **New Static Site** on Render.
-    *   Select your repository and target the **`Cherry`** branch.
-    *   Leave the **Build Command** blank.
-    *   Set the **Publish Directory** to `build/web`.
-    *   Deploy!
+### Setup Render Build Pipeline (Recommended)
+Configure your Render Static Site to build from source automatically:
+*   **Build Command**: `flutter build web --release`
+*   **Publish Directory**: `build/web`
 
 ---
 
@@ -87,3 +77,4 @@ This application is fully optimized for **Render's Free Static Site hosting**:
 
 *   **Developer:** Cherry 😉
 *   **Designer:** Bunny 🙄
+*   **License**: MIT License
