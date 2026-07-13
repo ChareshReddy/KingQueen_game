@@ -25,6 +25,7 @@ class PlayerModel {
     this.guardUsedThisRound = false,
     this.assassinUsedThisRound = false,
     this.lastSeen,
+    this.isAnonymous = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -41,6 +42,7 @@ class PlayerModel {
       'guardUsedThisRound': guardUsedThisRound,
       'assassinUsedThisRound': assassinUsedThisRound,
       'lastSeen': lastSeen?.toIso8601String(),
+      'isAnonymous': isAnonymous,
     };
   }
 
@@ -58,6 +60,7 @@ class PlayerModel {
       guardUsedThisRound: map['guardUsedThisRound'] ?? false,
       assassinUsedThisRound: map['assassinUsedThisRound'] ?? false,
       lastSeen: map['lastSeen'] != null ? DateTime.parse(map['lastSeen']) : null,
+      isAnonymous: map['isAnonymous'] ?? false,
     );
   }
 
@@ -74,6 +77,7 @@ class PlayerModel {
     bool? guardUsedThisRound,
     bool? assassinUsedThisRound,
     DateTime? lastSeen,
+    bool? isAnonymous,
   }) {
     return PlayerModel(
       id: id ?? this.id,
@@ -88,6 +92,7 @@ class PlayerModel {
       guardUsedThisRound: guardUsedThisRound ?? this.guardUsedThisRound,
       assassinUsedThisRound: assassinUsedThisRound ?? this.assassinUsedThisRound,
       lastSeen: lastSeen ?? this.lastSeen,
+      isAnonymous: isAnonymous ?? this.isAnonymous,
     );
   }
 }

@@ -27,6 +27,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isObscured = true;
 
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      final user = ref.read(firebaseServiceProvider).currentUser;
+      if (user != null && user.isAnonymous) {
+        try {
+          await ref.read(gameProvider.notifier).signOut();
+        } catch (e) {
+          debugPrint('Failed to clear anonymous session: $e');
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,

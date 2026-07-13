@@ -418,6 +418,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     }
                   },
                 ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                  label: const Text('LOG OUT', style: TextStyle(color: Colors.redAccent)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white.withOpacity(0.05),
+                    foregroundColor: Colors.redAccent,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await ref.read(gameProvider.notifier).signOut();
+                    if (context.mounted) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const LoginScreen()),
+                      );
+                    }
+                  },
+                ),
               ],
             ),
             actions: [

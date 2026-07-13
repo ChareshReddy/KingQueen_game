@@ -413,6 +413,20 @@ class GameNotifier extends Notifier<GameState> {
     state = GameState(me: state.me);
   }
 
+  Future<void> signOut() async {
+    final currentUser = _service.currentUser;
+    if (currentUser != null && currentUser.isAnonymous) {
+      try {
+        await currentUser.delete();
+      } catch (e) {
+        debugPrint('Failed to delete anonymous user auth account: $e');
+      }
+    }
+    _cancelSubscriptions();
+    await _service.signOut();
+    state = GameState();
+  }
+
   Future<void> protectPlayer(String targetPlayerId) async {
     if (state.currentRoom == null || state.me == null) return;
     await _service.protectPlayer(state.currentRoom!.id, state.me!.id, targetPlayerId);
