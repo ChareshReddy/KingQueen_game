@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:king_queen/models/message_model.dart';
 import 'package:king_queen/models/player_model.dart';
 import 'package:king_queen/models/room_model.dart';
+import 'package:flutter/foundation.dart';
 import 'package:king_queen/core/constants/game_constants.dart';
 import 'package:king_queen/core/utils/game_utils.dart';
 
@@ -564,29 +565,51 @@ class FirebaseService {
     });
   }
 
-  Future<void> cleanupStaleRooms() async {
+  Future<int> cleanupStaleRooms({bool limitDocs = true}) async {
+    final now = DateTime.now();
+    final oneDayAgo = now.subtract(const Duration(hours: 24));
+    final sevenDaysAgo = now.subtract(const Duration(days: 7));
+    final allDocs = <DocumentSnapshot>[];
+
     try {
-      final now = DateTime.now();
-      final oneDayAgo = now.subtract(const Duration(hours: 24));
-      final sevenDaysAgo = now.subtract(const Duration(days: 7));
+      var query = _db.collection('rooms')
+          .where('createdAt', isLessThan: oneDayAgo.toIso8601String());
+      if (limitDocs) {
+        query = query.limit(10);
+      }
+      final staleActiveSnap = await query.get();
+      allDocs.addAll(staleActiveSnap.docs);
+    } catch (e) {
+      debugPrint('cleanupStaleRooms (active query) failed: $e');
+    }
 
-      // Query rooms with status != 'finished' older than 24 hours
-      final staleActiveSnap = await _db.collection('rooms')
-          .where('createdAt', isLessThan: oneDayAgo.toIso8601String())
-          .limit(10)
-          .get();
-
-      // Query rooms with status == 'finished' older than 7 days
-      final staleFinishedSnap = await _db.collection('rooms')
+    try {
+      var query = _db.collection('rooms')
           .where('status', isEqualTo: 'finished')
-          .where('createdAt', isLessThan: sevenDaysAgo.toIso8601String())
-          .limit(10)
-          .get();
+          .where('createdAt', isLessThan: sevenDaysAgo.toIso8601String());
+      if (limitDocs) {
+        query = query.limit(10);
+      }
+      final staleFinishedSnap = await query.get();
+      allDocs.addAll(staleFinishedSnap.docs);
+    } catch (e) {
+      debugPrint('cleanupStaleRooms (finished query) failed: $e');
+    }
 
-      final allDocs = [...staleActiveSnap.docs, ...staleFinishedSnap.docs];
-      if (allDocs.isEmpty) return;
+    if (allDocs.isEmpty) return 0;
 
-      for (var doc in allDocs) {
+    // Deduplicate by ID
+    final seenIds = <String>{};
+    final uniqueDocs = <DocumentSnapshot>[];
+    for (var doc in allDocs) {
+      if (seenIds.add(doc.id)) {
+        uniqueDocs.add(doc);
+      }
+    }
+
+    int deletedCount = 0;
+    for (var doc in uniqueDocs) {
+      try {
         final players = await doc.reference.collection('players').get();
         final messages = await doc.reference.collection('messages').get();
 
@@ -599,9 +622,12 @@ class FirebaseService {
         }
         batch.delete(doc.reference);
         await batch.commit();
+        deletedCount++;
+        debugPrint('cleanupStaleRooms: Deleted stale room ${doc.id}');
+      } catch (e) {
+        debugPrint('cleanupStaleRooms: Failed to delete room ${doc.id}: $e');
       }
-    } catch (e) {
-      // Opportunistic cleanup is silent on failures
     }
+    return deletedCount;
   }
 }

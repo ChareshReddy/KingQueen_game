@@ -39,7 +39,7 @@ class HomeScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            onPressed: () => _showSettingsDialog(context),
+            onPressed: () => _showSettingsDialog(context, ref),
             icon: const Icon(Icons.settings_outlined, color: AppTheme.gold),
           ),
         ],
@@ -292,7 +292,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  void _showSettingsDialog(BuildContext context) {
+  void _showSettingsDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -329,6 +329,45 @@ class HomeScreen extends ConsumerWidget {
                   value: true,
                   onChanged: (val) {
                     setState(() {});
+                  },
+                ),
+                const Divider(color: Colors.white24),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.cleaning_services_rounded, color: Colors.black),
+                  label: const Text('CLEAN STALE LOBBIES'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.gold,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    final messenger = ScaffoldMessenger.of(context);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Starting stale lobbies cleanup...'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    try {
+                      final deletedCount = await ref.read(gameProvider.notifier).purgeStaleRoomsBacklog();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Successfully cleaned up $deletedCount stale lobbies!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text('Cleanup failed: $e'),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                    }
                   },
                 ),
               ],

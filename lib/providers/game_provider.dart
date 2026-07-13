@@ -326,6 +326,15 @@ class GameNotifier extends Notifier<GameState> {
     }
   }
 
+  Future<int> purgeStaleRoomsBacklog() async {
+    try {
+      return await _service.cleanupStaleRooms(limitDocs: false);
+    } catch (e) {
+      debugPrint('purgeStaleRoomsBacklog failed: $e');
+      rethrow;
+    }
+  }
+
   Future<void> startGame() async {
     if (state.currentRoom == null) return;
     

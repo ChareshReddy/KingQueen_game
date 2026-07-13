@@ -15,6 +15,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Helper to determine if a room is stale / expired
+    function isRoomStale(roomData) {
+      return roomData.containsKey('createdAt') && (
+        roomData.status == 'finished' 
+          ? request.time > timestamp.value(roomData.createdAt) + duration.value(7, 'd')
+          : request.time > timestamp.value(roomData.createdAt) + duration.value(24, 'h')
+      );
+    }
+
     // Users rules
     match /users/{userId} {
       allow read: if isAuthenticated();
@@ -31,7 +40,10 @@ service cloud.firestore {
         request.auth.uid in resource.data.playerIds || 
         request.auth.uid == resource.data.hostId
       );
-      allow delete: if isAuthenticated() && request.auth.uid == resource.data.hostId;
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.hostId ||
+        isRoomStale(resource.data)
+      );
 
       // Players subcollection
       match /players/{playerId} {
@@ -49,7 +61,8 @@ service cloud.firestore {
         );
         allow delete: if isAuthenticated() && (
           request.auth.uid == playerId ||
-          request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId
+          request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId ||
+          isRoomStale(get(/databases/$(database)/documents/rooms/$(roomId)).data)
         );
       }
 
@@ -61,7 +74,8 @@ service cloud.firestore {
         );
         allow delete: if isAuthenticated() && (
           request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId ||
-          request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds
+          request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds ||
+          isRoomStale(get(/databases/$(database)/documents/rooms/$(roomId)).data)
         );
       }
     }
