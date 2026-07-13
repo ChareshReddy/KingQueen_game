@@ -376,19 +376,24 @@ class GameNotifier extends Notifier<GameState> {
     return roles;
   }
 
-  void makeGuess(String guessedPlayerId) async {
+  Future<void> makeGuess(String guessedPlayerId) async {
     if (state.currentRoom == null || state.me == null) return;
 
     final room = state.currentRoom!;
     final me = state.me!;
 
-    await _service.resolveGuess(
-      roomId: room.id,
-      guesserId: me.id,
-      guessedPlayerId: guessedPlayerId,
-      currentRole: me.currentRole ?? '',
-    );
-    await refreshMe();
+    try {
+      await _service.resolveGuess(
+        roomId: room.id,
+        guesserId: me.id,
+        guessedPlayerId: guessedPlayerId,
+        currentRole: me.currentRole ?? '',
+      );
+      await refreshMe();
+    } catch (e) {
+      debugPrint('makeGuess failed: $e');
+      rethrow;
+    }
   }
 
   Future<void> toggleReady() async {

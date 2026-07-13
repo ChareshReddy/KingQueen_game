@@ -187,6 +187,13 @@ class FirebaseService {
           ? roomSnap.get('assassinTargetId') as String? 
           : null;
 
+      // WARNING: Collection queries (like playersColl.get() below) are executed outside of
+      // the strict transaction context because Firestore transaction.get() only supports
+      // single document reads. While this read does not cause a crash (as no write operation
+      // precedes it in the transaction), it introduces a potential race condition where
+      // players/roles could be modified between this query and the subsequent document writes.
+      // In a production hardening pass, this should be refactored to fetch individual player
+      // documents using transaction.get() using the known roomId/playerIds metadata.
       final playersSnap = await playersColl.get();
       final players = playersSnap.docs.map((doc) => PlayerModel.fromMap(doc.data())).toList();
       final chain = _computeRoleChain(players);
