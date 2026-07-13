@@ -35,8 +35,17 @@ service cloud.firestore {
     // Rooms rules
     match /rooms/{roomId} {
       allow create: if isAuthenticated();
-      // Allow read/update if the user is in the room
-      allow read, update: if isAuthenticated() && (
+      // Allow read if user is authenticated and the room doesn't exist yet (for uniqueness check), is waiting (for joining), they are in the room, or it is stale (for cleanups)
+      allow read: if isAuthenticated() && (
+        resource == null ||
+        resource.data.status == 'waiting' ||
+        request.auth.uid in resource.data.playerIds || 
+        request.auth.uid == resource.data.hostId ||
+        isRoomStale(resource.data)
+      );
+      // Allow update if the room is in waiting status (for joining) or the user is in the room
+      allow update: if isAuthenticated() && (
+        resource.data.status == 'waiting' ||
         request.auth.uid in resource.data.playerIds || 
         request.auth.uid == resource.data.hostId
       );
@@ -49,6 +58,7 @@ service cloud.firestore {
       match /players/{playerId} {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated() && (
+          get(/databases/$(database)/documents/rooms/$(roomId)).data.status == 'waiting' ||
           request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds ||
           request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId
         );
