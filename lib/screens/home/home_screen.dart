@@ -6,6 +6,7 @@ import 'package:king_queen/core/theme/app_theme.dart';
 import 'package:king_queen/providers/game_provider.dart';
 import 'package:king_queen/screens/lobby/lobby_screen.dart';
 import 'package:king_queen/screens/home/rules_screen.dart';
+import 'package:king_queen/screens/auth/login_screen.dart';
 import 'package:king_queen/widgets/gold_button.dart';
 import 'package:king_queen/widgets/animated_raja_rani_background.dart';
 
