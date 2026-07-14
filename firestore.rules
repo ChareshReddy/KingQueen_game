@@ -67,8 +67,12 @@ service cloud.firestore {
         allow update: if isAuthenticated() && (
           // Host can modify anything (initial role deal, resets, etc.)
           request.auth.uid == get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId ||
-          // Allow players in the room to update player documents (e.g. for ready status, online status, and role swaps)
-          (request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds)
+          // Doc owner can update their own metadata (ready status, online status, name) but NOT totalScore or currentRole
+          (request.auth.uid == playerId && 
+           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['totalScore', 'currentRole'])) ||
+          // Any player in the room can update player documents, but ONLY to swap currentRole
+          (request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.playerIds &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentRole']))
         );
         allow delete: if isAuthenticated() && (
           request.auth.uid == playerId ||
