@@ -186,7 +186,12 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
                     padding: const EdgeInsets.all(20),
                     itemCount: players.length,
                     itemBuilder: (context, index) {
-                      return _buildPlayerTile(players[index], gameData.me?.id == players[index].id);
+                      final player = players[index];
+                      return _buildPlayerTile(
+                        player,
+                        isMe: gameData.me?.id == player.id,
+                        isCurrentUserHost: room.hostId == gameData.me?.id,
+                      );
                     },
                   ),
                 ),
@@ -237,7 +242,7 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
     );
   }
 
-  Widget _buildPlayerTile(PlayerModel player, bool isMe) {
+  Widget _buildPlayerTile(PlayerModel player, {required bool isMe, required bool isCurrentUserHost}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -274,6 +279,46 @@ class _LobbyScreenState extends ConsumerState<LobbyScreen> with WidgetsBindingOb
           ),
           if (player.isHost)
             const Icon(Icons.stars, color: AppTheme.gold, size: 20),
+          // Kick button for host
+          if (isCurrentUserHost && !player.isHost && !isMe)
+            IconButton(
+              icon: const Icon(Icons.gavel_rounded, color: Colors.redAccent, size: 20),
+              tooltip: 'Kick Player',
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    backgroundColor: AppTheme.surface,
+                    title: const Text('Kick Player', style: TextStyle(color: Colors.redAccent)),
+                    content: Text('Are you sure you want to kick ${player.name} from the room?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('CANCEL'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('KICK', style: TextStyle(color: Colors.redAccent)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  try {
+                    await ref.read(gameProvider.notifier).kickPlayer(player.id);
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to kick player: $e'),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                    }
+                  }
+                }
+              },
+            ),
         ],
       ),
     );

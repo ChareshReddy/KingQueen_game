@@ -335,6 +335,16 @@ class GameNotifier extends Notifier<GameState> {
     }
   }
 
+  void _fisherYatesShuffle<T>(List<T> list) {
+    final random = Random();
+    for (int i = list.length - 1; i > 0; i--) {
+      int j = random.nextInt(i + 1);
+      final temp = list[i];
+      list[i] = list[j];
+      list[j] = temp;
+    }
+  }
+
   Future<void> startGame() async {
     if (state.currentRoom == null) return;
     
@@ -342,20 +352,37 @@ class GameNotifier extends Notifier<GameState> {
     if (players.length < 4) return;
 
     try {
-      final roles = _getRolesForPlayerCount(players.length);
-      roles.shuffle();
-      final Map<String, String> rolesMap = {};
+      final roles = List<String>.from(_getRolesForPlayerCount(players.length));
+      final shuffledPlayers = List<PlayerModel>.from(players);
 
-      for (int i = 0; i < players.length; i++) {
-        rolesMap[players[i].id] = roles[i];
+      _fisherYatesShuffle(roles);
+      _fisherYatesShuffle(shuffledPlayers);
+
+      final Map<String, String> rolesMap = {};
+      for (int i = 0; i < shuffledPlayers.length; i++) {
+        rolesMap[shuffledPlayers[i].id] = roles[i];
       }
 
-      final kingId = players[roles.indexOf('King')].id;
-      final queenId = players[roles.indexOf('Queen')].id;
-      final ministerId = players[roles.indexOf('Minister')].id;
-      final thiefId = players[roles.indexOf('Thief')].id;
+      String? kingId;
+      String? queenId;
+      String? ministerId;
+      String? thiefId;
 
-      await _service.updateGameRoles(state.currentRoom!.id, rolesMap, kingId, queenId, ministerId, thiefId);
+      rolesMap.forEach((playerId, role) {
+        if (role == 'King') kingId = playerId;
+        else if (role == 'Queen') queenId = playerId;
+        else if (role == 'Minister') ministerId = playerId;
+        else if (role == 'Thief') thiefId = playerId;
+      });
+
+      await _service.updateGameRoles(
+        state.currentRoom!.id,
+        rolesMap,
+        kingId ?? '',
+        queenId ?? '',
+        ministerId ?? '',
+        thiefId ?? '',
+      );
     } catch (e) {
       debugPrint('startGame failed: $e');
       rethrow;
@@ -425,6 +452,14 @@ class GameNotifier extends Notifier<GameState> {
     _cancelSubscriptions();
     await _service.signOut();
     state = GameState();
+  }
+
+  Future<void> kickPlayer(String playerId) async {
+    if (state.currentRoom == null || state.me == null) return;
+    if (state.currentRoom!.hostId != state.me!.id) {
+      throw Exception("Only the host can kick players");
+    }
+    await _service.leaveRoom(state.currentRoom!.id, playerId);
   }
 
   Future<void> protectPlayer(String targetPlayerId) async {
