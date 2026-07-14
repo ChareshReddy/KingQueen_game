@@ -11,6 +11,7 @@ class PlayerModel {
   final bool guardUsedThisRound;
   final bool assassinUsedThisRound;
   final DateTime? lastSeen;
+  final bool isAnonymous;
 
   PlayerModel({
     required this.id,
